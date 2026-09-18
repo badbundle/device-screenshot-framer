@@ -1,0 +1,45 @@
+{
+  "outputDirectory": "out",
+  "mode": "inset",
+  "background": {
+    "colors": [
+      "#0F172A",
+      "#1D4ED8",
+      "#7C3AED"
+    ],
+    "angle": 160
+  },
+  "text": {
+    "position": "bottom",
+    "title": {
+      "size": 92,
+      "weight": "bold",
+      "color": "#FFFFFF",
+      "font": "Avenir Next"
+    },
+    "subtitle": {
+      "size": 52,
+      "weight": "medium",
+      "color": "#FFFFFFB3",
+      "font": "Avenir Next"
+    }
+  },
+  "padding": 90,
+  "gap": 56,
+  "screenshots": [
+    {
+      "path": "raw/settings-dark.png",
+      "output": "inset-bottom",
+      "title": "Dark mode for your dark mode",
+      "subtitle": "Turn it on. Turn it off. Turn it on again.",
+      "frameColor": "Cosmic Orange",
+      "background": {
+        "colors": [
+          "#F97316",
+          "#DB2777"
+        ],
+        "angle": 200
+      }
+    }
+  ]
+}
