@@ -1,0 +1,42 @@
+{
+  "outputDirectory": "out",
+  "mode": "inset",
+  "background": {
+    "colors": [
+      "#0F172A",
+      "#1D4ED8",
+      "#7C3AED"
+    ],
+    "angle": 160
+  },
+  "text": {
+    "position": "top",
+    "title": {
+      "size": 92,
+      "weight": "bold",
+      "color": "#FFFFFF"
+    },
+    "subtitle": {
+      "size": 52,
+      "weight": "medium",
+      "color": "#FFFFFFB3"
+    }
+  },
+  "padding": 90,
+  "gap": 56,
+  "screenshots": [
+    {
+      "path": "raw/settings-light.png",
+      "output": "inset-solid",
+      "title": "Your Wi-Fi called.",
+      "subtitle": "It wants attention.",
+      "frameColor": "Silver",
+      "background": {
+        "colors": [
+          "#0EA5E9"
+        ]
+      }
+    }
+  ],
+  "deviceScale": 0.9
+}

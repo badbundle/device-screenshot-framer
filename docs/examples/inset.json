@@ -1,0 +1,49 @@
+{
+  "outputDirectory": "out",
+  "mode": "inset",
+  "background": {
+    "colors": [
+      "#0F172A",
+      "#1D4ED8",
+      "#7C3AED"
+    ],
+    "angle": 160
+  },
+  "text": {
+    "position": "top",
+    "title": {
+      "size": 92,
+      "weight": "bold",
+      "color": "#FFFFFF"
+    },
+    "subtitle": {
+      "size": 52,
+      "weight": "medium",
+      "color": "#FFFFFFB3"
+    }
+  },
+  "padding": 90,
+  "gap": 56,
+  "screenshots": [
+    {
+      "path": "raw/settings-light.png",
+      "output": "inset-top",
+      "title": "Toggles. So many toggles.",
+      "subtitle": "Flip them. Flip them back. We won't judge.",
+      "frameColor": "Deep Blue"
+    },
+    {
+      "path": "raw/ipad-settings.png",
+      "output": "ipad",
+      "title": "Bigger screen. Bigger toggles.",
+      "subtitle": "Every switch, now in glorious 13 inches.",
+      "background": {
+        "colors": [
+          "#064E3B",
+          "#10B981"
+        ],
+        "angle": 135
+      }
+    }
+  ]
+}
