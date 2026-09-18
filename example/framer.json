@@ -1,0 +1,22 @@
+{
+  "outputDirectory": "framed",
+  "output": { "width": 1290, "height": 2796, "format": "png", "jpegQuality": 0.9 },
+  "mode": "inset",
+  "device": null,
+  "frameColor": null,
+  "landscapeSide": "left",
+  "background": { "colors": ["#1E3A8A", "#9333EA"], "angle": 160 },
+  "text": {
+    "position": "top",
+    "title":    { "font": "system", "size": 96, "weight": "bold",    "color": "#FFFFFF" },
+    "subtitle": { "font": "system", "size": 56, "weight": "regular", "color": "#FFFFFFCC" },
+    "spacing": 24
+  },
+  "padding": 96,
+  "gap": 64,
+  "deviceScale": 1.0,
+  "screenshots": [
+    { "path": "raw/home.png",   "title": "Plan your day",     "subtitle": "Everything in one place" },
+    { "path": "raw/detail.png", "title": "Dive into details", "device": "iPhone 17 Pro", "frameColor": "Silver", "output": "02-detail" }
+  ]
+}
