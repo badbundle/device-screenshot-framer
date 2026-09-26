@@ -1,0 +1,43 @@
+{
+  "outputDirectory": "out",
+  "mode": "inset",
+  "background": {
+    "colors": [
+      "#0F172A",
+      "#1D4ED8",
+      "#7C3AED",
+      "#DB2777"
+    ],
+    "angle": 100
+  },
+  "text": {
+    "position": "top",
+    "title": {
+      "size": 92,
+      "weight": "bold",
+      "color": "#FFFFFF"
+    },
+    "subtitle": {
+      "size": 52,
+      "weight": "medium",
+      "color": "#FFFFFFB3"
+    }
+  },
+  "padding": 90,
+  "shadow": true,
+  "screenshots": [
+    {
+      "output": "panorama",
+      "pages": [
+        { "title": "One canvas.", "subtitle": "Swipe along the listing." },
+        { "title": "Three images.", "subtitle": "Devices cross the joins." },
+        { "title": "No seams.", "subtitle": "The background runs through." }
+      ],
+      "devices": [
+        { "path": "raw/settings-light.png", "x": 0.52, "y": 0.66, "width": 0.72, "frameColor": "Silver" },
+        { "path": "raw/maps.png", "x": 1.6, "y": 0.68, "width": 0.8, "rotation": 12, "frameColor": "Cosmic Orange" },
+        { "path": "raw/photos.png", "x": 2.44, "y": 0.72, "width": 0.72, "rotation": -6, "frameColor": "Deep Blue" }
+      ]
+    }
+  ]
+}
