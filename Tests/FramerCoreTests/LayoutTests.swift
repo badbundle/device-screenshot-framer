@@ -191,3 +191,114 @@ import Testing
         #expect(throws: Never.self) { try GradientSpec(colors: [.black, .white], locations: [0, 1]).validate() }
     }
 }
+
+@Suite struct BleedLayoutTests {
+    func input(position: TextPosition, deviceScale: Double = 1) -> InsetLayout.Input {
+        InsetLayout.Input(
+            canvas: PixelSize(1000, 2000), padding: 50, gap: 50, spacing: 20,
+            titleHeight: 300, subtitleHeight: 0,
+            framedSize: PixelSize(500, 1000), position: position, deviceScale: deviceScale, bleed: true
+        )
+    }
+
+    @Test func textOnTopPinsDeviceUnderTextAndRunsOffBottom() throws {
+        let layout = try InsetLayout.compute(input(position: .top))
+        // Sized by the text column width (900), not the leftover height.
+        #expect(layout.deviceRect == CGRect(x: 50, y: 400, width: 900, height: 1800))
+        #expect(layout.deviceRect.maxY > 2000)
+    }
+
+    @Test func textOnBottomPinsDeviceAboveTextAndRunsOffTop() throws {
+        let layout = try InsetLayout.compute(input(position: .bottom))
+        #expect(layout.deviceRect.maxY == 1600)
+        #expect(layout.deviceRect.minY < 0)
+    }
+
+    @Test func deviceScaleMultipliesWidth() throws {
+        let layout = try InsetLayout.compute(input(position: .top, deviceScale: 0.5))
+        #expect(layout.deviceRect.width == 450)
+        #expect(layout.deviceRect.minY == 400)
+        #expect(abs(layout.deviceRect.midX - 500) <= 1)
+    }
+}
+
+@Suite struct TextBlockTests {
+    @Test func offsetsByPageOrigin() {
+        let block = InsetLayout.textBlock(
+            canvas: PixelSize(1000, 2000), padding: 50, spacing: 20,
+            titleHeight: 100, subtitleHeight: 40, position: .bottom, originX: 2000
+        )
+        #expect(block.height == 160)
+        #expect(block.titleRect == CGRect(x: 2050, y: 1790, width: 900, height: 100))
+        #expect(block.subtitleRect == CGRect(x: 2050, y: 1910, width: 900, height: 40))
+    }
+}
+
+@Suite struct PlacementTests {
+    @Test func resolvesInPageUnits() {
+        let placed = DevicePlacement(x: 0.5, y: 0.25, width: 0.5, rotation: 12)
+            .resolve(page: PixelSize(1000, 2000), contentSize: PixelSize(300, 600))
+        #expect(placed.rect == CGRect(x: 250, y: 0, width: 500, height: 1000))
+        #expect(placed.rotation == 12)
+    }
+
+    @Test func xBeyondOneReachesLaterPages() {
+        let placed = DevicePlacement(x: 1.5, y: 0.5, width: 0.2).resolve(page: PixelSize(1000, 1000), contentSize: PixelSize(100, 100))
+        #expect(placed.center == CGPoint(x: 1500, y: 500))
+    }
+
+    @Test func unrotatedTransformMapsContentOntoRect() {
+        let t = PlacedRect(rect: CGRect(x: 100, y: 200, width: 60, height: 120)).transform(from: CGSize(width: 30, height: 60))
+        #expect(CGPoint(x: 0, y: 0).applying(t) == CGPoint(x: 100, y: 200))
+        #expect(CGPoint(x: 30, y: 60).applying(t) == CGPoint(x: 160, y: 320))
+    }
+
+    @Test func positiveRotationIsClockwise() {
+        let t = PlacedRect(rect: CGRect(x: 0, y: 0, width: 100, height: 200), rotation: 90).transform(from: CGSize(width: 100, height: 200))
+        // Top-centre of the content ends up on the right of the centre (50, 100).
+        let top = CGPoint(x: 50, y: 0).applying(t)
+        #expect(abs(top.x - 150) < 0.001 && abs(top.y - 100) < 0.001)
+    }
+}
+
+@Suite struct CalloutLayoutTests {
+    let device = PlacedRect(rect: CGRect(x: 100, y: 100, width: 150, height: 300))
+    let framedSize = PixelSize(300, 600)
+    let page = PixelSize(1000, 1000)
+
+    @Test func framedRegionFollowsTheScreenshotFill() {
+        let region = CalloutLayout.framedRegion(
+            CGRect(x: 10, y: 20, width: 100, height: 50),
+            screenshotFill: (rect: CGRect(x: 30, y: 40, width: 240, height: 520), scale: 0.5)
+        )
+        #expect(region == CGRect(x: 35, y: 50, width: 50, height: 25))
+    }
+
+    @Test func defaultCardSitsOverTheSource() {
+        let spec = CalloutSpec(region: .zero, scale: 2)
+        let result = CalloutLayout.compute(spec, region: CGRect(x: 100, y: 200, width: 40, height: 20), device: device, framedSize: framedSize, page: page)
+        // Device is drawn at half size: region -> (150, 200) 20x10.
+        #expect(result.source.rect == CGRect(x: 150, y: 200, width: 20, height: 10))
+        #expect(result.card.rect == CGRect(x: 140, y: 195, width: 40, height: 20))
+        #expect(result.card.rotation == 0)
+    }
+
+    @Test func explicitPositionAndRotation() {
+        let spec = CalloutSpec(region: .zero, x: 0.5, y: 0.25, scale: 1, rotation: -5)
+        let result = CalloutLayout.compute(spec, region: CGRect(x: 100, y: 200, width: 40, height: 20), device: device, framedSize: framedSize, page: page)
+        #expect(result.card.center == CGPoint(x: 500, y: 250))
+        #expect(result.card.rotation == -5)
+    }
+
+    @Test func inheritsDeviceRotation() {
+        var rotated = device
+        rotated.rotation = 90
+        let spec = CalloutSpec(region: .zero, scale: 1)
+        // Region at the top-centre of the device swings to the right of the device centre (175, 250).
+        let result = CalloutLayout.compute(spec, region: CGRect(x: 140, y: 0, width: 20, height: 20), device: rotated, framedSize: framedSize, page: page)
+        #expect(abs(result.source.center.x - (175 + 145)) < 0.001)
+        #expect(abs(result.source.center.y - 250) < 0.001)
+        #expect(result.source.rotation == 90)
+        #expect(result.card.rotation == 90)
+    }
+}

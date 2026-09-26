@@ -200,3 +200,118 @@ import Testing
         #expect(throws: FramerError.self) { try ImageLoader.load(URL(fileURLWithPath: "/nonexistent.png")) }
     }
 }
+
+@Suite struct PlacedRenderTests {
+    let blue = GradientSpec(solid: RGBAColor(red: 0, green: 0, blue: 1))
+    let noText = InsetRenderer.Text(
+        title: "",
+        titleStyle: TextStyle(font: FontSpec(size: 30), color: .white),
+        subtitleStyle: TextStyle(font: FontSpec(size: 20), color: .white),
+        position: .top,
+        spacing: 8
+    )
+
+    func render(
+        _ layers: [InsetRenderer.Layer],
+        callouts: [InsetRenderer.Callout] = [],
+        canvas: PixelSize,
+        background: GradientSpec? = nil,
+        pages: Int = 1,
+        style: InsetRenderer.Style = InsetRenderer.Style(padding: 20, gap: 20)
+    ) throws -> [Bitmap] {
+        try InsetRenderer.render(
+            layers: layers, callouts: callouts, canvas: canvas, background: background ?? blue,
+            pages: Array(repeating: noText, count: pages), style: style
+        ).map(Bitmap.init)
+    }
+
+    @Test func rotatesClockwiseAboutTheCentre() throws {
+        let placement = DevicePlacement(x: 0.5, y: 0.5, width: 0.3, rotation: 90)
+        let out = try render([InsetRenderer.Layer(framed: Synthetic.framed(), placement: placement)], canvas: PixelSize(1000, 1000))[0]
+        out.expect(500, 250, .blue)                   // would be device if upright
+        #expect(!out[250, 500].isClose(to: .blue, tolerance: 40))
+        #expect(!out[750, 500].isClose(to: .blue, tolerance: 40))
+        out.expect(742, 500, .black, tolerance: 10)   // island swung to the right
+    }
+
+    @Test func bleedRunsOffTheFarEdge() throws {
+        let text = InsetRenderer.Text(
+            title: "Title", subtitle: "Sub",
+            titleStyle: TextStyle(font: FontSpec(size: 30, weight: .bold), color: .white),
+            subtitleStyle: TextStyle(font: FontSpec(size: 20), color: .white),
+            position: .top, spacing: 8
+        )
+        let out = Bitmap(try InsetRenderer.render(
+            framed: Synthetic.framed(), canvas: PixelSize(400, 700), background: blue, text: text,
+            style: InsetRenderer.Style(padding: 20, gap: 20, bleed: true)
+        ))
+        out.expect(200, 699, .red)                    // screen reaches the bottom edge
+        out.expect(2, 699, .blue)                     // sides keep the padding
+    }
+
+    @Test func panoramaSplitsOneCanvasIntoPages() throws {
+        let placement = DevicePlacement(x: 1, y: 0.5, width: 0.5)
+        let pages = try render([InsetRenderer.Layer(framed: Synthetic.framed(), placement: placement)], canvas: PixelSize(400, 400), pages: 2)
+        #expect(pages.count == 2)
+        #expect(pages.allSatisfy { $0.width == 400 && $0.height == 400 })
+        #expect(!pages[0][395, 200].isClose(to: .blue, tolerance: 40))
+        #expect(!pages[1][5, 200].isClose(to: .blue, tolerance: 40))
+        pages[0].expect(100, 200, .blue)
+        pages[1].expect(300, 200, .blue)
+    }
+
+    @Test func gradientSpansAllPages() throws {
+        let gradient = GradientSpec(colors: [.black, .white], angleDegrees: 90)
+        let pages = try render([], canvas: PixelSize(100, 100), background: gradient, pages: 2)
+        pages[0].expect(0, 50, .black, tolerance: 8)
+        pages[1].expect(99, 50, .white, tolerance: 8)
+        #expect(pages[0][99, 50].r > 100 && pages[0][99, 50].r < 156)
+    }
+
+    @Test func shadowFallsBelowTheDevice() throws {
+        let white = GradientSpec(solid: .white)
+        let layer = InsetRenderer.Layer(framed: Synthetic.framed(), placement: DevicePlacement(x: 0.5, y: 0.5, width: 0.5))
+        // Device 300x600 at (150, 200); synthetic body bottom edge at y = 795.
+        let plain = try render([layer], canvas: PixelSize(600, 1000), background: white)[0]
+        plain.expect(300, 805, .white)
+        let shadow = ShadowSpec(color: .black, radius: 0, offsetY: 20)
+        let shaded = try render([layer], canvas: PixelSize(600, 1000), background: white, style: InsetRenderer.Style(padding: 20, gap: 20, shadow: shadow))[0]
+        shaded.expect(300, 805, .black, tolerance: 10)
+        shaded.expect(300, 500, .red)
+    }
+
+    @Test func calloutMagnifiesTheRegionWithBorderAndHighlight() throws {
+        let layer = InsetRenderer.Layer(framed: Synthetic.framed(), placement: DevicePlacement(x: 0.5, y: 0.5, width: 0.5))
+        // The green marker at the top-centre of the 240x520 screenshot; the device is drawn at scale 1 at (150, 300).
+        let region = CGRect(x: 110, y: 0, width: 20, height: 20)
+        let spec = CalloutSpec(region: region, x: 0.2, y: 0.2, scale: 3, cornerRadius: 0, borderWidth: 4)
+        let callout = InsetRenderer.Callout(
+            spec: spec,
+            image: Synthetic.screenshot(size: Synthetic.device.screenSize).cropping(to: region)!,
+            region: CalloutLayout.framedRegion(region, screenshotFill: (rect: Synthetic.cutout, scale: 1))
+        )
+        let out = try render([layer], callouts: [callout], canvas: PixelSize(600, 1200))[0]
+        // Card: 60x60 centred on (120, 240).
+        out.expect(120, 240, .green)
+        out.expect(92, 240, .white)
+        out.expect(80, 240, .blue)
+        // Source region on the device is (290, 340) 20x20; the outline sits just outside it.
+        out.expect(288, 350, .white, tolerance: 40)
+    }
+
+    @Test func severalUnplacedDevicesThrow() {
+        #expect(throws: FramerError.self) {
+            try render([InsetRenderer.Layer(framed: Synthetic.framed()), InsetRenderer.Layer(framed: Synthetic.framed())], canvas: PixelSize(400, 800))
+        }
+        #expect(throws: FramerError.self) {
+            try render([InsetRenderer.Layer(framed: Synthetic.framed())], canvas: PixelSize(400, 800), pages: 2)
+        }
+    }
+
+    @Test func calloutForMissingDeviceThrows() {
+        let callout = InsetRenderer.Callout(spec: CalloutSpec(device: 1, region: CGRect(x: 0, y: 0, width: 10, height: 10)), image: Synthetic.framed(), region: .zero)
+        #expect(throws: FramerError.self) {
+            try render([InsetRenderer.Layer(framed: Synthetic.framed())], callouts: [callout], canvas: PixelSize(400, 800))
+        }
+    }
+}

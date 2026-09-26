@@ -53,8 +53,13 @@ func runJobs(_ jobs: [RenderJob], options: GlobalOptions) async throws {
     let (outcomes, failures) = await renderer.run(jobs)
 
     for outcome in outcomes {
-        let frameNote = outcome.device.usesBorrowedFrame ? " (\(outcome.device.framePrefix.replacingOccurrences(of: "Apple ", with: "")) frame)" : ""
-        print("✓ \(outcome.output.path)  [\(outcome.device.name), \(outcome.frameColor)\(frameNote), \(outcome.size)]")
+        let devices = outcome.screens.map { screen in
+            let frameNote = screen.device.usesBorrowedFrame ? " (\(screen.device.framePrefix.replacingOccurrences(of: "Apple ", with: "")) frame)" : ""
+            return "\(screen.device.name), \(screen.frame.color)\(frameNote)"
+        }
+        for output in outcome.outputs {
+            print("✓ \(output.path)  [\(devices.joined(separator: " + ")), \(outcome.size)]")
+        }
     }
     for (job, error) in failures {
         FileHandle.standardError.write(Data("✗ \(job.input.path): \(error)\n".utf8))
