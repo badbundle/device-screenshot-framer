@@ -290,8 +290,9 @@ final class FakeServer: Sendable {
         #expect(overridden[0].outputURL.path == "/elsewhere/a.png")
     }
 
-    @Test func errorsAreReadable() {
-        #expect(throws: FramerError.self) { try ConfigLoader.decode(Data(#"{ "screenshots": [{ "title": "no path" }] }"#.utf8)) }
+    @Test func errorsAreReadable() throws {
+        let noPath = try ConfigLoader.decode(Data(#"{ "screenshots": [{ "title": "no path" }] }"#.utf8))
+        #expect(throws: FramerError.self) { try ConfigLoader.jobs(from: noPath, baseDirectory: URL(fileURLWithPath: "/")) }
         #expect(throws: FramerError.self) { try ConfigLoader.decode(Data(#"{ "mode": "fancy", "screenshots": [] }"#.utf8)) }
         #expect(throws: FramerError.self) { try ConfigLoader.jobs(from: FramerConfig(), baseDirectory: URL(fileURLWithPath: "/")) }
         #expect(throws: FramerError.self) {
@@ -300,6 +301,124 @@ final class FakeServer: Sendable {
                 baseDirectory: URL(fileURLWithPath: "/")
             )
         }
+    }
+}
+
+@Suite struct LayoutConfigTests {
+    let base = URL(fileURLWithPath: "/tmp/project", isDirectory: true)
+
+    func jobs(_ json: String) throws -> [RenderJob] {
+        try ConfigLoader.jobs(from: ConfigLoader.decode(Data(json.utf8)), baseDirectory: base)
+    }
+
+    func expectConfigError(_ json: String, containing fragment: String, sourceLocation: SourceLocation = #_sourceLocation) {
+        do {
+            _ = try jobs(json)
+            Issue.record("expected a config error containing '\(fragment)'", sourceLocation: sourceLocation)
+        } catch {
+            #expect("\(error)".contains(fragment), "\(error)", sourceLocation: sourceLocation)
+        }
+    }
+
+    @Test func shadowAcceptsTrueFalseOrObject() throws {
+        #expect(try ConfigLoader.decode(Data(#"{ "shadow": true, "screenshots": [] }"#.utf8)).shadow == ShadowConfig())
+        #expect(try ConfigLoader.decode(Data(#"{ "shadow": false, "screenshots": [] }"#.utf8)).shadow == nil)
+        #expect(try ConfigLoader.decode(Data(#"{ "screenshots": [] }"#.utf8)).shadow == nil)
+        let custom = try ConfigLoader.decode(Data(##"{ "shadow": { "color": "#FF000080", "offsetY": 12 }, "screenshots": [] }"##.utf8)).shadow
+        #expect(custom?.color.red == 1)
+        #expect(custom?.offsetY == 12)
+        #expect(custom?.radius == nil)
+    }
+
+    @Test func devicesInheritFromEntryThenTopLevel() throws {
+        let jobs = try jobs(#"""
+        {
+          "mode": "inset",
+          "frameColor": "Silver",
+          "device": "iPhone 17 Pro",
+          "landscapeSide": "right",
+          "shadow": true,
+          "screenshots": [{
+            "path": "raw/a.png",
+            "frameColor": "Deep Blue",
+            "title": "Two",
+            "devices": [
+              { "x": 0.3, "y": 0.6, "width": 0.5, "rotation": -8 },
+              { "path": "raw/b.png", "frameColor": "Cosmic Orange", "device": "iPhone 17", "landscapeSide": "left" }
+            ],
+            "callouts": [{ "device": 1, "region": { "x": 10, "y": 20, "width": 300, "height": 100 }, "x": 0.4 }]
+          }]
+        }
+        """#)
+        let inset = try #require(jobs[0].inset)
+        #expect(inset.devices.count == 2)
+        #expect(inset.devices[0].input.path == "/tmp/project/raw/a.png")
+        #expect(inset.devices[0].frameColor == "Deep Blue")
+        #expect(inset.devices[0].deviceName == "iPhone 17 Pro")
+        #expect(inset.devices[0].landscapeSide == .right)
+        #expect(inset.devices[0].placement == DevicePlacement(x: 0.3, y: 0.6, width: 0.5, rotation: -8))
+        #expect(inset.devices[1].input.path == "/tmp/project/raw/b.png")
+        #expect(inset.devices[1].frameColor == "Cosmic Orange")
+        #expect(inset.devices[1].deviceName == "iPhone 17")
+        #expect(inset.devices[1].landscapeSide == .left)
+        #expect(inset.devices[1].placement == DevicePlacement())
+        #expect(inset.callouts == [CalloutSpec(device: 1, region: CGRect(x: 10, y: 20, width: 300, height: 100), x: 0.4)])
+        #expect(inset.shadow == ShadowSpec())
+        #expect(jobs[0].outputURLs.map(\.lastPathComponent) == ["a.png"])
+    }
+
+    @Test func primaryInputIsTheFirstDevice() throws {
+        let jobs = try jobs(#"""
+        { "mode": "inset", "screenshots": [{ "devices": [{ "path": "raw/first.png" }, { "path": "raw/second.png" }] }] }
+        """#)
+        #expect(jobs[0].input.lastPathComponent == "first.png")
+        #expect(jobs[0].outputURL.lastPathComponent == "first.png")
+    }
+
+    @Test func bleedOverridesPerEntry() throws {
+        let jobs = try jobs(#"""
+        { "mode": "inset", "bleed": true, "screenshots": [{ "path": "a.png" }, { "path": "b.png", "bleed": false }] }
+        """#)
+        #expect(jobs[0].inset?.bleed == true)
+        #expect(jobs[1].inset?.bleed == false)
+    }
+
+    @Test func pagesWriteNumberedFiles() throws {
+        let jobs = try jobs(#"""
+        {
+          "mode": "inset",
+          "outputDirectory": "out",
+          "screenshots": [{
+            "output": "tour",
+            "pages": [{ "title": "One" }, { "subtitle": "Two" }, {}],
+            "devices": [{ "path": "a.png", "x": 1.5 }]
+          }]
+        }
+        """#)
+        #expect(jobs[0].inset?.pages == [RenderJob.Page(title: "One"), RenderJob.Page(subtitle: "Two"), RenderJob.Page()])
+        #expect(jobs[0].outputURLs.map(\.path) == ["/tmp/project/out/tour-1.png", "/tmp/project/out/tour-2.png", "/tmp/project/out/tour-3.png"])
+    }
+
+    @Test func layoutKeysNeedInsetMode() {
+        expectConfigError(#"{ "screenshots": [{ "devices": [{ "path": "a.png" }] }] }"#, containing: "'devices' needs \"mode\": \"inset\"")
+        expectConfigError(#"{ "screenshots": [{ "path": "a.png", "callouts": [{ "region": { "x": 0, "y": 0, "width": 1, "height": 1 } }] }] }"#, containing: "'callouts'")
+    }
+
+    @Test func invalidLayoutsAreRejected() {
+        expectConfigError(#"{ "mode": "inset", "screenshots": [{ "path": "a.png", "pages": [{}, {}] }] }"#, containing: "'pages' needs 'devices'")
+        expectConfigError(
+            #"{ "mode": "inset", "screenshots": [{ "title": "x", "pages": [{}, {}], "devices": [{ "path": "a.png" }] }] }"#,
+            containing: "put titles and subtitles in each page"
+        )
+        expectConfigError(#"{ "mode": "inset", "screenshots": [{ "devices": [{ "x": 0.5 }] }] }"#, containing: "screenshots[0].devices[0]: missing 'path'")
+        expectConfigError(
+            #"{ "mode": "inset", "screenshots": [{ "path": "a.png", "callouts": [{ "device": 1, "region": { "x": 0, "y": 0, "width": 1, "height": 1 } }] }] }"#,
+            containing: "out of range"
+        )
+        expectConfigError(
+            #"{ "mode": "inset", "screenshots": [{ "path": "a.png", "callouts": [{ "region": { "x": 0, "y": 0, "width": 0, "height": 1 } }] }] }"#,
+            containing: "positive width and height"
+        )
     }
 }
 
@@ -349,6 +468,82 @@ final class FakeServer: Sendable {
         let bitmap = Bitmap(try ImageLoader.load(outcome.output))
         bitmap.expect(2, 2, .blue)
         #expect(bitmap[300, 1200 - 30 - 15].isClose(to: .gray, tolerance: 40)) // body is inset 5px × scale from the device edge
+    }
+
+    /// A renderer whose store serves the synthetic frame as the iPhone 17 Pro, plus a 1206x2622 screenshot.
+    static func syntheticSetup(in dir: URL) throws -> (renderer: Renderer, shot: URL) {
+        let framePNG = dir.appendingPathComponent("frame.png")
+        try ImageWriter.write(Synthetic.frame(), to: framePNG, format: .png)
+        let shot = dir.appendingPathComponent("shot.png")
+        try ImageWriter.write(Synthetic.screenshot(size: PixelSize(1206, 2622)), to: shot, format: .png)
+        let server = FakeServer([
+            "version.txt": Data("7".utf8),
+            "files.json": Data(#"["Apple iPhone 17 Pro Silver.png"]"#.utf8),
+            "offsets.json": Data(#"{ "portrait": { "iPhone 17 Pro": { "offset": "+30+40", "width": 240 } } }"#.utf8),
+            "Apple iPhone 17 Pro Silver.png": try Data(contentsOf: framePNG),
+        ])
+        let store = FrameStore(cacheRoot: dir.appendingPathComponent("cache"), baseURL: URL(string: "https://example.test/")!, fetch: server.fetch)
+        return (Renderer(store: store), shot)
+    }
+
+    static func insetSettings(devices: [RenderJob.PlacedDevice] = [], callouts: [CalloutSpec] = [], pages: [RenderJob.Page] = []) -> RenderJob.InsetSettings {
+        RenderJob.InsetSettings(
+            title: pages.isEmpty ? "Hi" : "", subtitle: "",
+            titleStyle: TextStyle(font: FontSpec(size: 40, weight: .bold), color: .white),
+            subtitleStyle: TextStyle(font: FontSpec(size: 20), color: .white),
+            position: .top, spacing: 8, padding: 30, gap: 30, deviceScale: 1,
+            devices: devices, callouts: callouts, pages: pages
+        )
+    }
+
+    @Test func panoramaWritesOneFilePerPage() async throws {
+        let dir = try Synthetic.tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let (renderer, shot) = try Self.syntheticSetup(in: dir)
+
+        let job = RenderJob(
+            input: shot,
+            outputBase: dir.appendingPathComponent("out/tour"),
+            mode: .inset,
+            requestedWidth: 600,
+            requestedHeight: 1200,
+            background: GradientSpec(solid: RGBAColor(red: 0, green: 0, blue: 1)),
+            inset: Self.insetSettings(
+                devices: [
+                    RenderJob.PlacedDevice(input: shot, placement: DevicePlacement(x: 1, y: 0.5, width: 0.5, rotation: 8)),
+                    RenderJob.PlacedDevice(input: shot, placement: DevicePlacement(x: 2.5, y: 0.6, width: 0.6)),
+                ],
+                callouts: [CalloutSpec(device: 1, region: CGRect(x: 0, y: 0, width: 600, height: 300), x: 2.3, y: 0.3)],
+                pages: [RenderJob.Page(title: "One"), RenderJob.Page(title: "Two"), RenderJob.Page(title: "Three")]
+            )
+        )
+        let (outcomes, failures) = await renderer.run([job])
+        #expect(failures.isEmpty, "\(failures.map { "\($0.1)" })")
+        let outcome = try #require(outcomes.first)
+        #expect(outcome.outputs.map(\.lastPathComponent) == ["tour-1.png", "tour-2.png", "tour-3.png"])
+        #expect(outcome.screens.count == 2)
+        #expect(outcome.size == PixelSize(600, 1200))
+        let first = Bitmap(try ImageLoader.load(outcome.outputs[0]))
+        let second = Bitmap(try ImageLoader.load(outcome.outputs[1]))
+        #expect(first.width == 600 && first.height == 1200)
+        #expect(!first[595, 600].isClose(to: .blue, tolerance: 40))   // device straddles the first seam
+        #expect(!second[5, 600].isClose(to: .blue, tolerance: 40))
+    }
+
+    @Test func calloutOutsideTheScreenshotFails() async throws {
+        let dir = try Synthetic.tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let (renderer, shot) = try Self.syntheticSetup(in: dir)
+
+        let job = RenderJob(
+            input: shot,
+            outputBase: dir.appendingPathComponent("out/shot"),
+            mode: .inset,
+            inset: Self.insetSettings(callouts: [CalloutSpec(region: CGRect(x: 1000, y: 0, width: 300, height: 100))])
+        )
+        let (outcomes, failures) = await renderer.run([job])
+        #expect(outcomes.isEmpty)
+        #expect("\(try #require(failures.first).1)".contains("not inside the 1206x2622 screenshot"))
     }
 
     @Test func unknownSizeFailsWithHelpfulError() async throws {

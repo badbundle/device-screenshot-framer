@@ -21,12 +21,34 @@ extension CGContext {
         draw(image, in: rectTL.flipped(in: Double(height)))
     }
 
+    /// Draws `image` into `placed` (top-left coordinates), rotating it about the rect's centre.
+    func draw(_ image: CGImage, placed: PlacedRect) {
+        guard placed.rotation != 0 else {
+            draw(image, inTopLeft: placed.rect)
+            return
+        }
+        let size = CGSize(width: image.width, height: image.height)
+        saveGState()
+        concatenate(CGAffineTransform.flipY(height: size.height)
+            .concatenating(placed.transform(from: size))
+            .concatenating(.flipY(height: Double(height))))
+        draw(image, in: CGRect(origin: .zero, size: size))
+        restoreGState()
+    }
+
     /// Fills `rectTL` (top-left coordinates) with a solid colour.
     func fill(_ rectTL: CGRect, color: RGBAColor) {
         saveGState()
         setFillColor(color.cgColor)
         fill(rectTL.flipped(in: Double(height)))
         restoreGState()
+    }
+}
+
+extension CGAffineTransform {
+    /// Converts between top-left and CoreGraphics' bottom-left origin in a space of the given height (its own inverse).
+    static func flipY(height: Double) -> CGAffineTransform {
+        CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: height)
     }
 }
 

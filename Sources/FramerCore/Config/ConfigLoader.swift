@@ -33,38 +33,104 @@ public enum ConfigLoader {
 
         let outputDirectory = outputDirectoryOverride ?? resolve(config.outputDirectory, against: baseDirectory)
 
-        return try config.screenshots.map { entry in
-            let input = resolve(entry.path, against: baseDirectory)
-            let outputName = entry.output ?? input.deletingPathExtension().lastPathComponent
-            try entry.background?.gradient.validate()
+        return try config.screenshots.enumerated().map { index, entry in
+            try job(for: entry, context: "screenshots[\(index)]", config: config, baseDirectory: baseDirectory, outputDirectory: outputDirectory)
+        }
+    }
 
-            let inset: RenderJob.InsetSettings? = config.mode == .inset ? RenderJob.InsetSettings(
-                title: entry.title ?? "",
-                subtitle: entry.subtitle ?? "",
-                titleStyle: config.text.title.style,
-                subtitleStyle: config.text.subtitle.style,
-                position: config.text.position,
-                spacing: config.text.resolvedSpacing,
-                padding: config.padding,
-                gap: config.gap,
-                deviceScale: config.deviceScale
-            ) : nil
+    private static func job(
+        for entry: ScreenshotEntry,
+        context: String,
+        config: FramerConfig,
+        baseDirectory: URL,
+        outputDirectory: URL
+    ) throws -> RenderJob {
+        let devices = entry.devices ?? []
+        let callouts = entry.callouts ?? []
+        let pages = entry.pages ?? []
+        try entry.background?.gradient.validate()
 
-            return RenderJob(
-                input: input,
-                outputBase: outputDirectory.appendingPathComponent(outputName),
-                format: config.output.format,
-                jpegQuality: config.output.jpegQuality,
-                mode: config.mode,
-                deviceName: entry.device ?? config.device,
-                frameColor: entry.frameColor ?? config.frameColor,
-                landscapeSide: entry.landscapeSide ?? config.landscapeSide,
-                requestedWidth: config.output.width,
-                requestedHeight: config.output.height,
-                background: (entry.background ?? config.background)?.gradient,
-                inset: inset
+        if config.mode == .simple {
+            for (key, isUsed) in [("devices", !devices.isEmpty), ("callouts", !callouts.isEmpty), ("pages", !pages.isEmpty)] where isUsed {
+                throw FramerError.config("\(context): '\(key)' needs \"mode\": \"inset\"")
+            }
+        }
+        if !pages.isEmpty {
+            guard !devices.isEmpty else {
+                throw FramerError.config("\(context): 'pages' needs 'devices' to place devices across the pages")
+            }
+            guard entry.title == nil, entry.subtitle == nil else {
+                throw FramerError.config("\(context): with 'pages', put titles and subtitles in each page instead")
+            }
+        }
+
+        let placed = try devices.enumerated().map { deviceIndex, device -> RenderJob.PlacedDevice in
+            guard let path = device.path ?? entry.path else {
+                throw FramerError.config("\(context).devices[\(deviceIndex)]: missing 'path' (and the entry has none to inherit)")
+            }
+            return RenderJob.PlacedDevice(
+                input: resolve(path, against: baseDirectory),
+                deviceName: device.device ?? entry.device ?? config.device,
+                frameColor: device.frameColor ?? entry.frameColor ?? config.frameColor,
+                landscapeSide: device.landscapeSide ?? entry.landscapeSide ?? config.landscapeSide,
+                placement: device.placement
             )
         }
+
+        let deviceCount = max(placed.count, 1)
+        for (calloutIndex, callout) in callouts.enumerated() {
+            guard (0..<deviceCount).contains(callout.device) else {
+                throw FramerError.config("\(context).callouts[\(calloutIndex)]: 'device' \(callout.device) is out of range; the entry has \(deviceCount) device(s)")
+            }
+            guard callout.region.width > 0, callout.region.height > 0 else {
+                throw FramerError.config("\(context).callouts[\(calloutIndex)]: 'region' needs a positive width and height")
+            }
+            guard callout.scale > 0 else {
+                throw FramerError.config("\(context).callouts[\(calloutIndex)]: 'scale' must be greater than 0")
+            }
+        }
+
+        let input: URL
+        if let first = placed.first {
+            input = first.input
+        } else if let path = entry.path {
+            input = resolve(path, against: baseDirectory)
+        } else {
+            throw FramerError.config("\(context): missing 'path'")
+        }
+        let outputName = entry.output ?? input.deletingPathExtension().lastPathComponent
+
+        let inset: RenderJob.InsetSettings? = config.mode == .inset ? RenderJob.InsetSettings(
+            title: entry.title ?? "",
+            subtitle: entry.subtitle ?? "",
+            titleStyle: config.text.title.style,
+            subtitleStyle: config.text.subtitle.style,
+            position: config.text.position,
+            spacing: config.text.resolvedSpacing,
+            padding: config.padding,
+            gap: config.gap,
+            deviceScale: config.deviceScale,
+            bleed: entry.bleed ?? config.bleed,
+            shadow: config.shadow?.spec,
+            devices: placed,
+            callouts: callouts.map(\.spec),
+            pages: pages.map { RenderJob.Page(title: $0.title ?? "", subtitle: $0.subtitle ?? "") }
+        ) : nil
+
+        return RenderJob(
+            input: input,
+            outputBase: outputDirectory.appendingPathComponent(outputName),
+            format: config.output.format,
+            jpegQuality: config.output.jpegQuality,
+            mode: config.mode,
+            deviceName: entry.device ?? config.device,
+            frameColor: entry.frameColor ?? config.frameColor,
+            landscapeSide: entry.landscapeSide ?? config.landscapeSide,
+            requestedWidth: config.output.width,
+            requestedHeight: config.output.height,
+            background: (entry.background ?? config.background)?.gradient,
+            inset: inset
+        )
     }
 
     static func resolve(_ path: String, against base: URL) -> URL {

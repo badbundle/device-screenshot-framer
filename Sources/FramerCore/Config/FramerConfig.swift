@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 public enum RenderMode: String, Sendable, Codable, CaseIterable {
@@ -21,6 +22,10 @@ public struct FramerConfig: Sendable, Codable, Equatable {
     /// Gap between text block and device in pixels (inset mode). Default: same as padding.
     public var gap: Double?
     public var deviceScale: Double
+    /// Inset mode, automatic layout: size the device by width and let it run off the edge opposite the text.
+    public var bleed: Bool
+    /// Inset mode: drop shadow under devices and callout cards. JSON accepts `true` for the defaults.
+    public var shadow: ShadowConfig?
     public var screenshots: [ScreenshotEntry]
 
     public init(
@@ -35,6 +40,8 @@ public struct FramerConfig: Sendable, Codable, Equatable {
         padding: Double? = nil,
         gap: Double? = nil,
         deviceScale: Double = 1,
+        bleed: Bool = false,
+        shadow: ShadowConfig? = nil,
         screenshots: [ScreenshotEntry] = []
     ) {
         self.outputDirectory = outputDirectory
@@ -48,6 +55,8 @@ public struct FramerConfig: Sendable, Codable, Equatable {
         self.padding = padding
         self.gap = gap
         self.deviceScale = deviceScale
+        self.bleed = bleed
+        self.shadow = shadow
         self.screenshots = screenshots
     }
 
@@ -64,6 +73,12 @@ public struct FramerConfig: Sendable, Codable, Equatable {
         padding = try c.decodeIfPresent(Double.self, forKey: .padding)
         gap = try c.decodeIfPresent(Double.self, forKey: .gap)
         deviceScale = try c.decodeIfPresent(Double.self, forKey: .deviceScale) ?? 1
+        bleed = try c.decodeIfPresent(Bool.self, forKey: .bleed) ?? false
+        if let enabled = try? c.decodeIfPresent(Bool.self, forKey: .shadow) {
+            shadow = enabled ? ShadowConfig() : nil
+        } else {
+            shadow = try c.decodeIfPresent(ShadowConfig.self, forKey: .shadow)
+        }
         screenshots = try c.decodeIfPresent([ScreenshotEntry].self, forKey: .screenshots) ?? []
     }
 }
@@ -110,6 +125,35 @@ public struct BackgroundConfig: Sendable, Codable, Equatable {
 
     public var gradient: GradientSpec {
         GradientSpec(colors: colors, angleDegrees: angle, locations: locations)
+    }
+}
+
+public struct ShadowConfig: Sendable, Codable, Equatable {
+    public var color: RGBAColor
+    /// Blur radius in pixels. Default: 5 % of canvas width.
+    public var radius: Double?
+    public var offsetX: Double
+    /// Pixels, positive = down. Default: 2 % of canvas width.
+    public var offsetY: Double?
+
+    public init(color: RGBAColor = ShadowSpec().color, radius: Double? = nil, offsetX: Double = 0, offsetY: Double? = nil) {
+        self.color = color
+        self.radius = radius
+        self.offsetX = offsetX
+        self.offsetY = offsetY
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = ShadowConfig()
+        color = try c.decodeIfPresent(RGBAColor.self, forKey: .color) ?? defaults.color
+        radius = try c.decodeIfPresent(Double.self, forKey: .radius)
+        offsetX = try c.decodeIfPresent(Double.self, forKey: .offsetX) ?? 0
+        offsetY = try c.decodeIfPresent(Double.self, forKey: .offsetY)
+    }
+
+    public var spec: ShadowSpec {
+        ShadowSpec(color: color, radius: radius, offsetX: offsetX, offsetY: offsetY)
     }
 }
 
@@ -171,7 +215,8 @@ public struct FontConfig: Sendable, Codable, Equatable {
 }
 
 public struct ScreenshotEntry: Sendable, Codable, Equatable {
-    public var path: String
+    /// Required unless every entry in `devices` has its own `path`. With `devices`, it is the default `path` for them.
+    public var path: String?
     public var title: String?
     public var subtitle: String?
     public var device: String?
@@ -180,16 +225,27 @@ public struct ScreenshotEntry: Sendable, Codable, Equatable {
     public var output: String?
     public var background: BackgroundConfig?
     public var landscapeSide: LandscapeSide?
+    public var bleed: Bool?
+    /// Inset mode: explicitly placed devices instead of the automatic layout.
+    public var devices: [DeviceEntry]?
+    /// Inset mode: enlarged copies of parts of a device's screen.
+    public var callouts: [CalloutEntry]?
+    /// Inset mode: two or more make a panorama, one image per page. Requires `devices`.
+    public var pages: [PageEntry]?
 
     public init(
-        path: String,
+        path: String? = nil,
         title: String? = nil,
         subtitle: String? = nil,
         device: String? = nil,
         frameColor: String? = nil,
         output: String? = nil,
         background: BackgroundConfig? = nil,
-        landscapeSide: LandscapeSide? = nil
+        landscapeSide: LandscapeSide? = nil,
+        bleed: Bool? = nil,
+        devices: [DeviceEntry]? = nil,
+        callouts: [CalloutEntry]? = nil,
+        pages: [PageEntry]? = nil
     ) {
         self.path = path
         self.title = title
@@ -199,5 +255,153 @@ public struct ScreenshotEntry: Sendable, Codable, Equatable {
         self.output = output
         self.background = background
         self.landscapeSide = landscapeSide
+        self.bleed = bleed
+        self.devices = devices
+        self.callouts = callouts
+        self.pages = pages
+    }
+}
+
+/// A device at an explicit position. `x`, `y` (centre) and `width` are fractions of the page; see `DevicePlacement`.
+public struct DeviceEntry: Sendable, Codable, Equatable {
+    public var path: String?
+    public var x: Double
+    public var y: Double
+    public var width: Double
+    /// Degrees clockwise.
+    public var rotation: Double
+    public var device: String?
+    public var frameColor: String?
+    public var landscapeSide: LandscapeSide?
+
+    public init(
+        path: String? = nil,
+        x: Double = 0.5,
+        y: Double = 0.5,
+        width: Double = 0.8,
+        rotation: Double = 0,
+        device: String? = nil,
+        frameColor: String? = nil,
+        landscapeSide: LandscapeSide? = nil
+    ) {
+        self.path = path
+        self.x = x
+        self.y = y
+        self.width = width
+        self.rotation = rotation
+        self.device = device
+        self.frameColor = frameColor
+        self.landscapeSide = landscapeSide
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = DeviceEntry()
+        path = try c.decodeIfPresent(String.self, forKey: .path)
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? defaults.x
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? defaults.y
+        width = try c.decodeIfPresent(Double.self, forKey: .width) ?? defaults.width
+        rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? defaults.rotation
+        device = try c.decodeIfPresent(String.self, forKey: .device)
+        frameColor = try c.decodeIfPresent(String.self, forKey: .frameColor)
+        landscapeSide = try c.decodeIfPresent(LandscapeSide.self, forKey: .landscapeSide)
+    }
+
+    public var placement: DevicePlacement {
+        DevicePlacement(x: x, y: y, width: width, rotation: rotation)
+    }
+}
+
+public struct CalloutEntry: Sendable, Codable, Equatable {
+    /// Index into the entry's `devices` (0 for the automatically laid-out device).
+    public var device: Int
+    public var region: RegionConfig
+    public var x: Double?
+    public var y: Double?
+    public var scale: Double
+    public var rotation: Double?
+    public var cornerRadius: Double?
+    public var borderWidth: Double?
+    public var borderColor: RGBAColor
+    public var highlight: Bool
+
+    public init(
+        device: Int = 0,
+        region: RegionConfig,
+        x: Double? = nil,
+        y: Double? = nil,
+        scale: Double = 1.5,
+        rotation: Double? = nil,
+        cornerRadius: Double? = nil,
+        borderWidth: Double? = nil,
+        borderColor: RGBAColor = .white,
+        highlight: Bool = true
+    ) {
+        self.device = device
+        self.region = region
+        self.x = x
+        self.y = y
+        self.scale = scale
+        self.rotation = rotation
+        self.cornerRadius = cornerRadius
+        self.borderWidth = borderWidth
+        self.borderColor = borderColor
+        self.highlight = highlight
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        device = try c.decodeIfPresent(Int.self, forKey: .device) ?? 0
+        region = try c.decode(RegionConfig.self, forKey: .region)
+        x = try c.decodeIfPresent(Double.self, forKey: .x)
+        y = try c.decodeIfPresent(Double.self, forKey: .y)
+        scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.5
+        rotation = try c.decodeIfPresent(Double.self, forKey: .rotation)
+        cornerRadius = try c.decodeIfPresent(Double.self, forKey: .cornerRadius)
+        borderWidth = try c.decodeIfPresent(Double.self, forKey: .borderWidth)
+        borderColor = try c.decodeIfPresent(RGBAColor.self, forKey: .borderColor) ?? .white
+        highlight = try c.decodeIfPresent(Bool.self, forKey: .highlight) ?? true
+    }
+
+    public var spec: CalloutSpec {
+        CalloutSpec(
+            device: device,
+            region: region.rect,
+            x: x,
+            y: y,
+            scale: scale,
+            rotation: rotation,
+            cornerRadius: cornerRadius,
+            borderWidth: borderWidth,
+            borderColor: borderColor,
+            highlight: highlight
+        )
+    }
+}
+
+/// A rectangle in screenshot pixels, top-left origin.
+public struct RegionConfig: Sendable, Codable, Equatable {
+    public var x: Double
+    public var y: Double
+    public var width: Double
+    public var height: Double
+
+    public init(x: Double, y: Double, width: Double, height: Double) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    public var rect: CGRect { CGRect(x: x, y: y, width: width, height: height) }
+}
+
+public struct PageEntry: Sendable, Codable, Equatable {
+    public var title: String?
+    public var subtitle: String?
+
+    public init(title: String? = nil, subtitle: String? = nil) {
+        self.title = title
+        self.subtitle = subtitle
     }
 }

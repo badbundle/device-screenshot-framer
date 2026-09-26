@@ -15,10 +15,29 @@
   </tr>
 </table>
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/examples/bleed.png" width="200" alt="Settings in a Cosmic Orange frame running off the bottom of an orange gradient"><br><sub><code>bleed</code></sub></td>
+    <td align="center"><img src="docs/examples/hero.png" width="200" alt="An oversized, tilted Maps screenshot cropped by the canvas"><br><sub>hero crop: one large, rotated device</sub></td>
+    <td align="center"><img src="docs/examples/two-devices.png" width="200" alt="Light and dark Settings in two overlapping, tilted frames"><br><sub>two devices</sub></td>
+    <td align="center"><img src="docs/examples/callout.png" width="200" alt="Photos library with one photo enlarged in a card beside the device"><br><sub>zoom callout</sub></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/examples/panorama-1.png" width="200" alt="Panorama page 1"></td>
+    <td align="center"><img src="docs/examples/panorama-2.png" width="200" alt="Panorama page 2, with a tilted Maps device crossing into page 3"></td>
+    <td align="center"><img src="docs/examples/panorama-3.png" width="200" alt="Panorama page 3"></td>
+  </tr>
+  <tr><td colspan="3" align="center"><sub>panorama: one canvas cut into three App Store images</sub></td></tr>
+</table>
+
 - Detects the device from the screenshot's pixel size (iPhone 5s → iPhone 17 Pro Max / Air, iPads), or force one with `--device`.
 - Portrait and landscape (choose which side the notch / Dynamic Island ends up on).
 - Output at any size up to the screenshot's native size, aspect-fit and centred.
 - **Inset mode**: title + subtitle above or below the device on a linear gradient, rendered with CoreText (system SF font or any installed font).
+- **Layouts** (inset mode): let the device bleed off the edge, place and rotate one or more devices anywhere (hero crops, overlapping pairs), enlarge part of a screen into a zoom callout, add drop shadows, and cut one wide canvas into a panorama of several images.
 - Batch rendering from a JSON config.
 - No Ruby, ImageMagick or Node — just CoreGraphics, CoreText and ImageIO. Single binary, zero runtime dependencies.
 
@@ -39,6 +58,7 @@ Device frames are downloaded on demand from [fastlane/frameit-frames](https://gi
   - [Global options](#global-options)
   - [Exit status and output](#exit-status-and-output)
 - [Config file reference](#config-file-reference)
+  - [Layouts](#layouts)
 - [How images are built](#how-images-are-built)
 - [Devices](#devices)
 - [Frames cache](#frames-cache)
@@ -182,7 +202,7 @@ Accepted by `frame`, `render` and `download-frames`:
 
 ### Exit status and output
 
-- One line per rendered file on stdout: `✓ <path>  [<device>, <colour>, <WxH>]`.
+- One line per rendered file on stdout: `✓ <path>  [<device>, <colour>, <WxH>]`. With several devices, each `<device>, <colour>` pair is joined with ` + `.
 - Failures are reported per file on stderr (`✗ <input>: <reason>`) and rendering continues with the remaining inputs. Exit status is `1` if any input failed, `0` otherwise.
 - Warnings (colour fallback, clamped size, unknown font, screenshot size not matching a forced device) go to stderr and do not affect the exit status.
 
@@ -233,8 +253,10 @@ Used by `framer render`. JSON, UTF-8. Every key except `screenshots` is optional
 | `text` | object | see below | Text styling for inset mode. Ignored in simple mode. |
 | `padding` | number | 5 % of canvas width | Inset mode: distance in pixels from the canvas edge to the text and the device. |
 | `gap` | number | = `padding` | Inset mode: distance between the text block and the device. |
-| `deviceScale` | number | `1.0` | Inset mode: multiplier on the device size within its available area. `1` fills the area; `0.8` leaves 20 % breathing room. The device stays pinned to the edge opposite the text. |
-| `screenshots` | array | **required** | One entry per input image. |
+| `deviceScale` | number | `1.0` | Inset mode: multiplier on the device size within its available area. `1` fills the area; `0.8` leaves 20 % breathing room. The device stays pinned to the edge opposite the text. With `bleed`, a multiplier on the device width instead. |
+| `bleed` | boolean | `false` | Inset mode: size the device to the text column's width (`× deviceScale`), pin it `gap` below (or above) the text, and let whatever doesn't fit run off the opposite edge. Applies only to the automatic layout, not to `devices`. See [Layouts](#layouts). |
+| `shadow` | `true` \| object \| null | none | Inset mode: drop shadow under every device and callout card. `true` uses the defaults. See [`shadow`](#shadow). |
+| `screenshots` | array | **required** | One entry per input image (or per panorama). |
 
 ### `output`
 
@@ -258,6 +280,15 @@ A solid colour or a linear gradient.
 | `locations` | array of numbers 0–1 | evenly spaced | Optional colour stops, one per colour. |
 
 Colours accept `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA` (the `#` is optional).
+
+### `shadow`
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `color` | hex string | `"#00000073"` | Shadow colour, alpha allowed. |
+| `radius` | number | 5 % of canvas width | Blur radius in pixels. |
+| `offsetX` | number | `0` | Horizontal offset in pixels. |
+| `offsetY` | number | 2 % of canvas width | Vertical offset in pixels, positive = down. Rotated devices still cast downwards. |
 
 ### `text`
 
@@ -283,7 +314,7 @@ Text is word-wrapped to the canvas width minus padding and centred. Newlines in 
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `path` | string | **required** | Input image, relative to the config file or absolute. `~` is expanded. |
+| `path` | string | **required** unless every entry in `devices` has one | Input image, relative to the config file or absolute. `~` is expanded. With `devices`, the default `path` for devices that don't set one. |
 | `title` | string | none | Inset mode title. |
 | `subtitle` | string | none | Inset mode subtitle. |
 | `device` | string | top-level `device` | Force a device for this entry. |
@@ -291,8 +322,106 @@ Text is word-wrapped to the canvas width minus padding and centred. Newlines in 
 | `output` | string | input basename | Output file name without extension. |
 | `background` | object | top-level `background` | Background for this entry (replaces, does not merge). |
 | `landscapeSide` | `"left"` \| `"right"` | top-level `landscapeSide` | Notch side for this entry. |
+| `bleed` | boolean | top-level `bleed` | Bleed for this entry. |
+| `devices` | array | none | Inset mode: place one or more devices explicitly instead of using the automatic layout. See [`screenshots[].devices`](#screenshotsdevices). |
+| `callouts` | array | none | Inset mode: enlarge parts of a device's screen. See [`screenshots[].callouts`](#screenshotscallouts). |
+| `pages` | array | none | Inset mode: two or more pages make a panorama. Requires `devices`; replaces `title` / `subtitle`. See [`screenshots[].pages`](#screenshotspages). |
 
-In inset mode an entry with neither `title` nor `subtitle` renders with an empty text block and a warning.
+In inset mode an entry with neither `title` nor `subtitle` (on any page) renders with an empty text block and a warning.
+
+`devices`, `callouts` and `pages` fail with a config error in simple mode.
+
+### Layouts
+
+Inset mode lays the device out automatically: fitted into the space the text leaves, pinned to the opposite edge. Everything below changes that, per entry.
+
+**Page units.** Positions and sizes in `devices` and `callouts` are fractions of the page (the output canvas): `x` and `width` of its width, `y` of its height. `x` / `y` are the centre of the device or card. `0.5, 0.5` is the middle of the page; values below 0 or above 1 put things partly off the canvas, which is how hero crops work. In a panorama `x` keeps counting across pages, so `x: 1.5` is the middle of the second page.
+
+**Drawing order**: background, devices (in array order, so later devices sit on top), callout outlines, callout cards, then text. Text is drawn last so a device that reaches into it stays behind it.
+
+**Resolution.** A device drawn wider than its frame image is upscaled (a `width: 1.5` hero on a native-size iPhone 17 Pro canvas is about 1.35×), so it looks slightly softer than the rest of the image.
+
+Recipes, each an entry in `screenshots` with `"mode": "inset"` at the top level:
+
+```jsonc
+// Bleed: the device fills the width under the text and runs off the bottom.
+{ "path": "raw/home.png", "title": "Plan your day", "bleed": true }
+
+// Hero crop: one oversized device, rotated, mostly off the canvas.
+{ "title": "Every metric", "devices": [{ "path": "raw/dashboard.png", "x": 0.75, "y": 1.0, "width": 1.5, "rotation": -16 }] }
+
+// Two devices, overlapping. The second is drawn on top.
+{
+  "title": "Light or dark",
+  "devices": [
+    { "path": "raw/dark.png",  "x": 0.66, "y": 0.6,  "width": 0.6, "rotation": 9,  "frameColor": "Deep Blue" },
+    { "path": "raw/light.png", "x": 0.35, "y": 0.67, "width": 0.6, "rotation": -6 }
+  ]
+}
+
+// Zoom callout: enlarge a region of the screenshot into a card. Works with the automatic layout too.
+{
+  "path": "raw/photos.png",
+  "title": "Zoom in on the details",
+  "callouts": [{ "region": { "x": 856, "y": 856, "width": 350, "height": 398 }, "x": 0.3, "y": 0.55, "scale": 2.2 }]
+}
+
+// Panorama: three images from one canvas; the middle device crosses into page 3.
+{
+  "output": "tour",
+  "pages": [{ "title": "One" }, { "title": "Two" }, { "title": "Three" }],
+  "devices": [
+    { "path": "raw/a.png", "x": 0.5,  "y": 0.66, "width": 0.72 },
+    { "path": "raw/b.png", "x": 1.6,  "y": 0.68, "width": 0.8, "rotation": 12 },
+    { "path": "raw/c.png", "x": 2.44, "y": 0.72, "width": 0.72, "rotation": -6 }
+  ]
+}
+```
+
+Add `"shadow": true` at the top level to separate overlapping devices and lift callout cards off the background.
+
+### `screenshots[].devices`
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `path` | string | entry's `path` | Screenshot for this device. |
+| `x` | number | `0.5` | Horizontal centre, in page widths. |
+| `y` | number | `0.5` | Vertical centre, in page heights. |
+| `width` | number | `0.8` | Device width (frame included), in page widths. Height follows the frame's aspect. |
+| `rotation` | number | `0` | Degrees clockwise about the device's centre. |
+| `device` | string | entry's, then top-level `device` | Force a device. |
+| `frameColor` | string | entry's, then top-level `frameColor` | Frame colour. |
+| `landscapeSide` | `"left"` \| `"right"` | entry's, then top-level `landscapeSide` | Notch side for a landscape screenshot. |
+
+With `devices`, `deviceScale`, `bleed` and `gap` don't apply; `padding` still positions the text. The first device decides the default output name, the canvas size when only one of `width` / `height` is given, and the native-size cap.
+
+### `screenshots[].callouts`
+
+A callout copies a rectangle of a device's screenshot into a card, enlarged, with a border (and the drop shadow, if `shadow` is set). By default the region is also outlined on the device so the two read as a pair.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `region` | object | **required** | `{ "x", "y", "width", "height" }` in the screenshot's own pixels, top-left origin. Must lie inside the screenshot. |
+| `device` | integer | `0` | Index into `devices` (0 is the automatically laid-out device when there is no `devices`). |
+| `x` | number | over the region | Card centre, in page widths. |
+| `y` | number | over the region | Card centre, in page heights. |
+| `scale` | number | `1.5` | Card size relative to the region's size on the device. |
+| `rotation` | number | the device's | Card rotation in degrees clockwise. |
+| `cornerRadius` | number | 3 % of canvas width | Card corner radius in pixels. |
+| `borderWidth` | number | 0.8 % of canvas width | Card border in pixels. `0` for none. |
+| `borderColor` | hex string | `"#FFFFFF"` | Card border and region outline colour. |
+| `highlight` | boolean | `true` | Outline the region on the device. |
+
+### `screenshots[].pages`
+
+Two or more pages turn an entry into a panorama: one canvas `pages.length` pages wide, cut into separate images written as `<output>-1`, `<output>-2`, …. The background gradient spans the whole canvas and devices can cross the joins, so the images line up when shown side by side, as on the App Store. Each page has its own text, styled and positioned by `text` like any other entry.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `title` | string | none | Title for this page. |
+| `subtitle` | string | none | Subtitle for this page. |
+
+A panorama needs `devices` (the automatic layout only handles one device on one page). Setting the entry's `title` or `subtitle` as well is a config error. `--only` matches the entry's `output` name, not the numbered files.
 
 ---
 
@@ -301,10 +430,10 @@ In inset mode an entry with neither `title` nor `subtitle` renders with an empty
 1. **Detect** the device from the screenshot's pixel size (either orientation). `--device` / `device` overrides; if the forced device's size differs from the screenshot, the screenshot is scaled to fill the frame's screen and a warning is printed.
 2. **Fetch the frame** for that device and colour from the cache, downloading it if needed.
 3. **Composite at the frame's native pixel size.** The screenshot is aspect-filled into the screen cutout and clipped to the device's real display corner radius; the frame is drawn on top so the notch / Dynamic Island covers it. Landscape screenshots rotate the frame (90° counter-clockwise for `left`, clockwise for `right`).
-4. **Size the canvas** (`width` / `height` rules above) and **aspect-fit** the framed image into it, centred.
+4. **Size the canvas** (`width` / `height` rules above, using the first device) and **aspect-fit** the framed image into it, centred.
 5. **Simple mode**: fill the background if one is set, draw the framed image.
-   **Inset mode**: fill the background, measure and draw the title and subtitle at `position`, then fit the device into what's left — full width minus `padding`, pinned to the edge opposite the text with `gap` between them.
-6. **Write** PNG (RGBA) or JPEG (flattened).
+   **Inset mode**: fill the background and measure the title and subtitle. Place the device: by default fitted into what the text leaves (full width minus `padding`, pinned to the edge opposite the text with `gap` between them); with `bleed`, sized to that width and allowed to run off the far edge; with `devices`, wherever each one says. Draw the devices with their shadow, callout outlines and cards, then the text at `position`. A panorama does all of this on one canvas `pages` wide and then cuts it into pages.
+6. **Write** PNG (RGBA) or JPEG (flattened), one file per page.
 
 ---
 
@@ -411,7 +540,9 @@ let job = RenderJob(
 let (outcomes, failures) = await renderer.run([job])
 ```
 
-`Renderer.run` never throws; it returns per-job outcomes and errors. For finer control, `Renderer.prepare(_:manifest:)` (async: detect device, fetch frame) and `Renderer.render(_:)` (synchronous: all CoreGraphics work) can be called separately. Loading a config file: `ConfigLoader.load(url)` → `ConfigLoader.jobs(from:baseDirectory:)`.
+For layouts, `RenderJob.InsetSettings` also takes `bleed`, `shadow: ShadowSpec?`, `devices: [RenderJob.PlacedDevice]` (each with its own `input` and a `DevicePlacement`), `callouts: [CalloutSpec]` and `pages: [RenderJob.Page]`, mirroring the config keys. `RenderJob.outputURLs` lists the files a job writes.
+
+`Renderer.run` never throws; it returns per-job outcomes and errors. `Outcome.outputs` has one URL per page and `Outcome.screens` one entry per device. For finer control, `Renderer.prepare(_:manifest:)` (async: detect device, fetch frame) and `Renderer.render(_:)` (synchronous: all CoreGraphics work) can be called separately. Loading a config file: `ConfigLoader.load(url)` → `ConfigLoader.jobs(from:baseDirectory:)`.
 
 Lower-level pieces, all public:
 
@@ -421,7 +552,10 @@ Lower-level pieces, all public:
 | `FrameStore` / `FrameManifest` / `FrameResolver` | Download, cache and resolve frames and their screen offsets. `FrameStore.fetch` is injectable for tests. |
 | `FrameGeometry` / `OrientedGeometry` | Cutout rect, aspect-fill/fit maths, landscape transforms. |
 | `FrameCompositor` | Screenshot + frame → framed `CGImage` at native size. |
-| `SimpleRenderer` / `InsetRenderer` / `InsetLayout` | The two output modes; `InsetLayout.compute` is pure layout maths. |
+| `SimpleRenderer` / `InsetRenderer` / `InsetLayout` | The two output modes; `InsetLayout.compute` is pure layout maths. `InsetRenderer.render(layers:callouts:canvas:background:pages:style:)` draws several devices and pages. |
+| `DevicePlacement` / `PlacedRect` | Device positions in page units, and the resolved (rotated) rect on the canvas. |
+| `CalloutSpec` / `CalloutLayout` / `CalloutRenderer` | Zoom callouts: settings, pure layout maths, drawing. |
+| `ShadowSpec` | Drop shadow under devices and callout cards. |
 | `TextRenderer` / `TextStyle` / `FontSpec` / `FontWeight` | CoreText measuring and drawing. |
 | `GradientSpec` / `RGBAColor` | Backgrounds and colours. |
 | `ImageLoader` / `ImageWriter` / `OutputFormat` | ImageIO in and out. |
@@ -451,6 +585,11 @@ framer frame docs/examples/raw/settings-dark.png  -o out --width 900 --color "De
 framer render --config docs/examples/inset.json          # text on top; iPhone + iPad
 framer render --config docs/examples/inset-bottom.json   # text at bottom, Avenir Next
 framer render --config docs/examples/inset-solid.json    # solid background, deviceScale 0.9
+
+# Layouts (iPhone 17 Pro simulator; also needs raw/photos.png, raw/maps.png and raw/maps-dark.png
+# captured from Photos and Maps the same way)
+framer render --config docs/examples/layouts.json        # bleed, hero crop, two devices, callout
+framer render --config docs/examples/panorama.json       # three-page panorama
 ```
 
 The committed PNGs are downscaled to 640 px for the README; the tool's output is full resolution.
@@ -461,7 +600,7 @@ The committed PNGs are downscaled to 640 px for the README; the tool's output is
 
 ```sh
 swift build
-swift test          # 72 tests; synthetic frames, no network
+swift test          # 101 tests; synthetic frames, no network
 ```
 
 - `Sources/FramerCore` — the library (device table, frame store, geometry, rendering, config, pipeline).
@@ -469,4 +608,4 @@ swift test          # 72 tests; synthetic frames, no network
 - `Tests/FramerCoreTests` — swift-testing suites. Frames and screenshots are generated in-process; the frame store is tested with an injected in-memory fetcher.
 - CI runs `swift build`, `swift test` and a release-build smoke test on `macos-15` (Xcode 16.4) and `macos-26`.
 
-Everything renders through CoreGraphics in top-left pixel coordinates; the only y-flip is `CGRect.flipped(in:)`.
+Everything renders through CoreGraphics in top-left pixel coordinates; the only y-flips are `CGRect.flipped(in:)` and, for rotated drawing, `CGAffineTransform.flipY(height:)`.

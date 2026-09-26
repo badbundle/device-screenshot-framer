@@ -1,0 +1,90 @@
+{
+  "outputDirectory": "out",
+  "mode": "inset",
+  "background": {
+    "colors": [
+      "#0F172A",
+      "#1D4ED8",
+      "#7C3AED"
+    ],
+    "angle": 160
+  },
+  "text": {
+    "position": "top",
+    "title": {
+      "size": 92,
+      "weight": "bold",
+      "color": "#FFFFFF"
+    },
+    "subtitle": {
+      "size": 52,
+      "weight": "medium",
+      "color": "#FFFFFFB3"
+    }
+  },
+  "padding": 90,
+  "gap": 80,
+  "shadow": true,
+  "screenshots": [
+    {
+      "path": "raw/settings-light.png",
+      "output": "bleed",
+      "bleed": true,
+      "title": "Settings, supersized.",
+      "subtitle": "The device runs straight off the bottom.",
+      "frameColor": "Cosmic Orange",
+      "background": {
+        "colors": [
+          "#F97316",
+          "#DB2777"
+        ],
+        "angle": 200
+      }
+    },
+    {
+      "output": "hero",
+      "title": "Scotland, up close.",
+      "subtitle": "Oversized, tilted and cropped.",
+      "background": {
+        "colors": [
+          "#020617",
+          "#0F766E"
+        ],
+        "angle": 170
+      },
+      "devices": [
+        { "path": "raw/maps-dark.png", "x": 0.74, "y": 0.98, "width": 1.5, "rotation": -16, "frameColor": "Deep Blue" }
+      ]
+    },
+    {
+      "output": "two-devices",
+      "title": "Light or dark.",
+      "subtitle": "Two screenshots, one image.",
+      "devices": [
+        { "path": "raw/settings-dark.png", "x": 0.66, "y": 0.6, "width": 0.6, "rotation": 9, "frameColor": "Deep Blue" },
+        { "path": "raw/settings-light.png", "x": 0.35, "y": 0.67, "width": 0.6, "rotation": -6, "frameColor": "Silver" }
+      ]
+    },
+    {
+      "path": "raw/photos.png",
+      "output": "callout",
+      "title": "Zoom in on the details.",
+      "subtitle": "Any region of the screen, enlarged.",
+      "frameColor": "Silver",
+      "background": {
+        "colors": [
+          "#831843",
+          "#DB2777",
+          "#F9A8D4"
+        ],
+        "angle": 165
+      },
+      "devices": [
+        { "x": 0.58, "y": 0.63, "width": 0.7 }
+      ],
+      "callouts": [
+        { "region": { "x": 856, "y": 856, "width": 350, "height": 398 }, "x": 0.3, "y": 0.55, "scale": 2.2, "rotation": -4 }
+      ]
+    }
+  ]
+}
