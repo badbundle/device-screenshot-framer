@@ -259,6 +259,9 @@ final class FakeServer: Sendable {
         #expect(config.landscapeSide == .left)
         #expect(config.text.position == .top)
         #expect(config.text.resolvedSpacing == 22)
+        #expect(config.text.minScale == 0.75)
+        #expect(config.text.maxScale == 1.5)
+        #expect(config.text.maxRotation == 4)
         #expect(config.deviceScale == 1)
     }
 
@@ -381,6 +384,17 @@ final class FakeServer: Sendable {
         """#)
         #expect(jobs[0].inset?.bleed == true)
         #expect(jobs[1].inset?.bleed == false)
+    }
+
+    @Test func textFitSettingsReachTheJob() throws {
+        let jobs = try jobs(#"""
+        { "mode": "inset", "text": { "minScale": 0.9, "maxScale": 1.2, "maxRotation": 0 }, "screenshots": [{ "path": "a.png" }] }
+        """#)
+        #expect(jobs[0].inset?.textScale == 0.9...1.2)
+        #expect(jobs[0].inset?.maxTextRotation == 0)
+        expectConfigError(#"{ "mode": "inset", "text": { "maxScale": 0.8 }, "screenshots": [{ "path": "a.png" }] }"#, containing: "'text.maxScale' must be at least 1")
+        expectConfigError(#"{ "mode": "inset", "text": { "minScale": 0 }, "screenshots": [{ "path": "a.png" }] }"#, containing: "'text.minScale'")
+        expectConfigError(#"{ "mode": "inset", "text": { "maxRotation": -1 }, "screenshots": [{ "path": "a.png" }] }"#, containing: "'text.maxRotation'")
     }
 
     @Test func pagesWriteNumberedFiles() throws {

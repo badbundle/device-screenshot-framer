@@ -134,6 +134,16 @@ public enum TextRenderer {
         return size.height.rounded(.up) + 1
     }
 
+    /// Widths of the lines `text` wraps to at `width`, trailing spaces excluded. Empty for empty text.
+    static func lineWidths(_ text: String, style: TextStyle, width: Double) -> [Double] {
+        guard !text.isEmpty, width > 0 else { return [] }
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedString(text, style: style))
+        let path = CGPath(rect: CGRect(x: 0, y: 0, width: width, height: 1_000_000), transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+        let lines = CTFrameGetLines(frame) as! [CTLine]
+        return lines.map { CTLineGetTypographicBounds($0, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth($0) }
+    }
+
     /// Draws `text` centred inside `rectTL` (top-left coordinates), lines flowing from the top.
     static func draw(_ text: String, style: TextStyle, in rectTL: CGRect, ctx: CGContext) {
         guard !text.isEmpty, rectTL.width > 0, rectTL.height > 0 else { return }

@@ -30,6 +30,15 @@ public enum ConfigLoader {
             throw FramerError.config("'screenshots' is empty")
         }
         try config.background?.gradient.validate()
+        guard config.text.minScale > 0, config.text.minScale <= 1 else {
+            throw FramerError.config("'text.minScale' must be greater than 0 and at most 1")
+        }
+        guard config.text.maxScale >= 1 else {
+            throw FramerError.config("'text.maxScale' must be at least 1")
+        }
+        guard config.text.maxRotation >= 0 else {
+            throw FramerError.config("'text.maxRotation' must not be negative")
+        }
 
         let outputDirectory = outputDirectoryOverride ?? resolve(config.outputDirectory, against: baseDirectory)
 
@@ -112,6 +121,8 @@ public enum ConfigLoader {
             deviceScale: config.deviceScale,
             bleed: entry.bleed ?? config.bleed,
             shadow: config.shadow?.spec,
+            textScale: config.text.minScale...config.text.maxScale,
+            maxTextRotation: config.text.maxRotation,
             devices: placed,
             callouts: callouts.map(\.spec),
             pages: pages.map { RenderJob.Page(title: $0.title ?? "", subtitle: $0.subtitle ?? "") }

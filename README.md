@@ -37,7 +37,7 @@
 - Portrait and landscape (choose which side the notch / Dynamic Island ends up on).
 - Output at any size up to the screenshot's native size, aspect-fit and centred.
 - **Inset mode**: title + subtitle above or below the device on a linear gradient, rendered with CoreText (system SF font or any installed font).
-- **Layouts** (inset mode): let the device bleed off the edge, place and rotate one or more devices anywhere (hero crops, overlapping pairs), enlarge part of a screen into a zoom callout, add drop shadows, and cut one wide canvas into a panorama of several images.
+- **Layouts** (inset mode): let the device bleed off the edge, place and rotate one or more devices anywhere (hero crops, overlapping pairs), enlarge part of a screen into a zoom callout, add drop shadows, and cut one wide canvas into a panorama of several images. The text follows placed devices: it moves down to them, grows or shrinks to fill the room, and tilts slightly with them.
 - Batch rendering from a JSON config.
 - No Ruby, ImageMagick or Node — just CoreGraphics, CoreText and ImageIO. Single binary, zero runtime dependencies.
 
@@ -298,6 +298,9 @@ Colours accept `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA` (the `#` is optional).
 | `title` | font object | bold 96 px white | Title style. |
 | `subtitle` | font object | regular 56 px white @ 80 % | Subtitle style. |
 | `spacing` | number | `0.4 × subtitle.size` | Vertical gap between title and subtitle. |
+| `minScale` | number | `0.75` | With `devices`: the smallest the text may shrink to, as a multiple of its size, to keep `gap` from a device that crowds it. At most `1`. |
+| `maxScale` | number | `1.5` | With `devices`: the largest the text may grow to, as a multiple of its size, to fill the room above (or below) them. At least `1`; `1` keeps the sizes as given. |
+| `maxRotation` | number | `4` | With `devices`: the most, in degrees, the text may tilt to follow them. `0` keeps it level. |
 
 Font object:
 
@@ -308,7 +311,7 @@ Font object:
 | `weight` | string \| null | font's own | `ultraLight`, `thin`, `light`, `regular`, `medium`, `semibold`, `bold`, `heavy`, `black`. Applied as a CoreText weight trait, so it works for the system font and for families like Avenir Next. Omit to use the exact face named in `font`. |
 | `color` | hex string | `"#FFFFFF"` | Text colour, alpha allowed. |
 
-Text is word-wrapped to the canvas width minus padding and centred. Newlines in `title` / `subtitle` start a new line. If the text block leaves no room for the device the entry fails with `title/subtitle block leaves no room for the device`.
+Text is word-wrapped to the canvas width minus padding and centred. Newlines in `title` / `subtitle` start a new line. If the text block leaves no room for the device the entry fails with `title/subtitle block leaves no room for the device`. With `devices` the text fits itself to them instead; see [Text with placed devices](#text-with-placed-devices).
 
 ### `screenshots[]`
 
@@ -380,6 +383,16 @@ Recipes, each an entry in `screenshots` with `"mode": "inset"` at the top level:
 
 Add `"shadow": true` at the top level to separate overlapping devices and lift callout cards off the background.
 
+#### Text with placed devices
+
+Placed devices don't make room for the text, so the text fits itself to them:
+
+- **Tilt.** It turns by half the tilt of the device or callout card nearest to it straight below (above, for `"position": "bottom"`) its centre, capped at `text.maxRotation` (4°). A device at `-16°` gets `-4°` text; an upright one, or none, keeps it level.
+- **Size.** It scales between `text.minScale` and `text.maxScale` (0.75–1.5×) to fill the room between `padding` and the devices, but never onto more lines than it has at its given size.
+- **Position.** It moves towards the devices until it is `gap` from the nearest one, measured around the turned text, so the space goes above it rather than between it and the devices.
+
+Panorama pages share one scale and move the same distance, so their text lines up across the joins; each page tilts with its own device. The text is left at its edge, level and at its given size, if there is nothing in its way or something is within `gap` of it even at `minScale`. The automatic layout (no `devices`) always uses the given sizes; there the device already sits `gap` from the text.
+
 ### `screenshots[].devices`
 
 | Key | Type | Default | Description |
@@ -393,7 +406,7 @@ Add `"shadow": true` at the top level to separate overlapping devices and lift c
 | `frameColor` | string | entry's, then top-level `frameColor` | Frame colour. |
 | `landscapeSide` | `"left"` \| `"right"` | entry's, then top-level `landscapeSide` | Notch side for a landscape screenshot. |
 
-With `devices`, `deviceScale`, `bleed` and `gap` don't apply; `padding` still positions the text. The first device decides the default output name, the canvas size when only one of `width` / `height` is given, and the native-size cap.
+With `devices`, `deviceScale` and `bleed` don't apply; `gap` is what the text keeps from the devices (see [Text with placed devices](#text-with-placed-devices)). The first device decides the default output name, the canvas size when only one of `width` / `height` is given, and the native-size cap.
 
 ### `screenshots[].callouts`
 
@@ -432,7 +445,7 @@ A panorama needs `devices` (the automatic layout only handles one device on one 
 3. **Composite at the frame's native pixel size.** The screenshot is aspect-filled into the screen cutout and clipped to the device's real display corner radius; the frame is drawn on top so the notch / Dynamic Island covers it. Landscape screenshots rotate the frame (90° counter-clockwise for `left`, clockwise for `right`).
 4. **Size the canvas** (`width` / `height` rules above, using the first device) and **aspect-fit** the framed image into it, centred.
 5. **Simple mode**: fill the background if one is set, draw the framed image.
-   **Inset mode**: fill the background and measure the title and subtitle. Place the device: by default fitted into what the text leaves (full width minus `padding`, pinned to the edge opposite the text with `gap` between them); with `bleed`, sized to that width and allowed to run off the far edge; with `devices`, wherever each one says. Draw the devices with their shadow, callout outlines and cards, then the text at `position`. A panorama does all of this on one canvas `pages` wide and then cuts it into pages.
+   **Inset mode**: fill the background and measure the title and subtitle. Place the device: by default fitted into what the text leaves (full width minus `padding`, pinned to the edge opposite the text with `gap` between them); with `bleed`, sized to that width and allowed to run off the far edge; with `devices`, wherever each one says, after which the text tilts, scales and moves to sit `gap` from them. Draw the devices with their shadow, callout outlines and cards, then the text at `position`. A panorama does all of this on one canvas `pages` wide and then cuts it into pages.
 6. **Write** PNG (RGBA) or JPEG (flattened), one file per page.
 
 ---
@@ -540,7 +553,7 @@ let job = RenderJob(
 let (outcomes, failures) = await renderer.run([job])
 ```
 
-For layouts, `RenderJob.InsetSettings` also takes `bleed`, `shadow: ShadowSpec?`, `devices: [RenderJob.PlacedDevice]` (each with its own `input` and a `DevicePlacement`), `callouts: [CalloutSpec]` and `pages: [RenderJob.Page]`, mirroring the config keys. `RenderJob.outputURLs` lists the files a job writes.
+For layouts, `RenderJob.InsetSettings` also takes `bleed`, `shadow: ShadowSpec?`, `textScale: ClosedRange<Double>`, `maxTextRotation`, `devices: [RenderJob.PlacedDevice]` (each with its own `input` and a `DevicePlacement`), `callouts: [CalloutSpec]` and `pages: [RenderJob.Page]`, mirroring the config keys. `RenderJob.outputURLs` lists the files a job writes.
 
 `Renderer.run` never throws; it returns per-job outcomes and errors. `Outcome.outputs` has one URL per page and `Outcome.screens` one entry per device. For finer control, `Renderer.prepare(_:manifest:)` (async: detect device, fetch frame) and `Renderer.render(_:)` (synchronous: all CoreGraphics work) can be called separately. Loading a config file: `ConfigLoader.load(url)` → `ConfigLoader.jobs(from:baseDirectory:)`.
 

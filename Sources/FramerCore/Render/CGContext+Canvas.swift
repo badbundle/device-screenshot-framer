@@ -36,6 +36,14 @@ extension CGContext {
         restoreGState()
     }
 
+    /// Turns everything drawn after it `degrees` clockwise about `pointTL` (top-left coordinates).
+    func rotate(degrees: Double, aboutTopLeft pointTL: CGPoint) {
+        let pivot = CGPoint(x: pointTL.x, y: Double(height) - pointTL.y)
+        translateBy(x: pivot.x, y: pivot.y)
+        rotate(by: -degrees * .pi / 180)
+        translateBy(x: -pivot.x, y: -pivot.y)
+    }
+
     /// Fills `rectTL` (top-left coordinates) with a solid colour.
     func fill(_ rectTL: CGRect, color: RGBAColor) {
         saveGState()

@@ -53,3 +53,61 @@ public struct PlacedRect: Sendable, Equatable {
             .concatenating(CGAffineTransform(translationX: rect.midX, y: rect.midY))
     }
 }
+
+extension PlacedRect {
+    /// Corners on the canvas after rotation, clockwise from the rect's own top-left.
+    public var corners: [CGPoint] {
+        let t = transform(from: rect.size)
+        return [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: rect.width, y: 0),
+            CGPoint(x: rect.width, y: rect.height),
+            CGPoint(x: 0, y: rect.height),
+        ].map { $0.applying(t) }
+    }
+
+    /// Topmost and bottommost canvas y of the rotated rect within the vertical strip `xRange`. `nil` if it misses the strip.
+    public func verticalExtent(within xRange: ClosedRange<Double>) -> ClosedRange<Double>? {
+        let clipped = Self.clip(Self.clip(corners, toX: xRange.lowerBound, keepAbove: true), toX: xRange.upperBound, keepAbove: false)
+        guard let top = clipped.map(\.y).min(), let bottom = clipped.map(\.y).max() else { return nil }
+        return top...bottom
+    }
+
+    /// Axis-aligned bounds of the rotated rect.
+    public var bounds: CGRect {
+        let xs = corners.map(\.x)
+        let ys = corners.map(\.y)
+        return CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+    }
+
+    /// How far this rect can move straight down (`downward`) or up before it touches `other`; negative if they already
+    /// overlap, or `other` is on the side it moves away from. `nil` if no vertical line crosses both.
+    public func verticalClearance(to other: PlacedRect, downward: Bool) -> Double? {
+        let mine = corners
+        let theirs = other.corners
+        let low = max(mine.map(\.x).min()!, theirs.map(\.x).min()!)
+        let high = min(mine.map(\.x).max()!, theirs.map(\.x).max()!)
+        guard low <= high else { return nil }
+        // Both outlines are straight between corners, so the closest approach is at a corner or an end of the overlap.
+        let xs = [low, high] + (mine + theirs).map(\.x).filter { $0 > low && $0 < high }
+        return xs.compactMap { x -> Double? in
+            guard let a = verticalExtent(within: x...x), let b = other.verticalExtent(within: x...x) else { return nil }
+            return downward ? b.lowerBound - a.upperBound : a.lowerBound - b.upperBound
+        }.min()
+    }
+
+    /// One Sutherland–Hodgman step: the part of a convex polygon on one side of the vertical line `x = limit`.
+    private static func clip(_ points: [CGPoint], toX limit: Double, keepAbove: Bool) -> [CGPoint] {
+        func inside(_ p: CGPoint) -> Bool { keepAbove ? p.x >= limit : p.x <= limit }
+        var out: [CGPoint] = []
+        for (index, p) in points.enumerated() {
+            let q = points[(index + 1) % points.count]
+            if inside(p) { out.append(p) }
+            if inside(p) != inside(q) {
+                let t = (limit - p.x) / (q.x - p.x)
+                out.append(CGPoint(x: limit, y: p.y + t * (q.y - p.y)))
+            }
+        }
+        return out
+    }
+}
