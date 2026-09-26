@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 public enum TextPosition: String, Sendable, Codable, CaseIterable {
     case top
@@ -57,9 +58,12 @@ public struct InsetLayout: Sendable, Equatable {
         public var subtitleRect: CGRect
         /// Title + spacing + subtitle. 0 when there is no text.
         public var height: Double
+
+        public var center: CGPoint { CGPoint(x: titleRect.midX, y: titleRect.minY + height / 2) }
     }
 
-    /// Title and subtitle rects for one page whose left edge is at `originX`.
+    /// Title and subtitle rects for one page whose left edge is at `originX`. `shift` moves the block from its edge
+    /// towards the middle of the page.
     public static func textBlock(
         canvas: PixelSize,
         padding: Double,
@@ -67,7 +71,8 @@ public struct InsetLayout: Sendable, Equatable {
         titleHeight: Double,
         subtitleHeight: Double,
         position: TextPosition,
-        originX: Double = 0
+        originX: Double = 0,
+        shift: Double = 0
     ) -> TextBlock {
         let spacing = (titleHeight > 0 && subtitleHeight > 0) ? spacing : 0
         let height = titleHeight + spacing + subtitleHeight
@@ -75,15 +80,69 @@ public struct InsetLayout: Sendable, Equatable {
         let y: Double
         switch position {
         case .top:
-            y = padding
+            y = padding + shift
         case .bottom:
-            y = Double(canvas.height) - padding - height
+            y = Double(canvas.height) - padding - height - shift
         }
         return TextBlock(
             titleRect: CGRect(x: originX + padding, y: y, width: width, height: titleHeight),
             subtitleRect: CGRect(x: originX + padding, y: y + titleHeight + spacing, width: width, height: subtitleHeight),
             height: height
         )
+    }
+
+    /// Tilt for the text on the page whose left edge is at `originX`, following the nearest part of `content` straight
+    /// below (or above) the text's centre: half that content's tilt from level, at most `maxRotation` degrees either
+    /// way. 0 if nothing is there.
+    public static func textRotation(
+        canvas: PixelSize,
+        position: TextPosition,
+        content: [PlacedRect],
+        maxRotation: Double,
+        originX: Double = 0
+    ) -> Double {
+        let centerX = originX + Double(canvas.width) / 2
+        let crossing = content.compactMap { item in item.verticalExtent(within: centerX...centerX).map { (item, $0) } }
+        let nearest: PlacedRect?
+        switch position {
+        case .top: nearest = crossing.min { $0.1.lowerBound < $1.1.lowerBound }?.0
+        case .bottom: nearest = crossing.max { $0.1.upperBound < $1.1.upperBound }?.0
+        }
+        guard let rotation = nearest?.rotation else { return 0 }
+        // A device turned 90° has level edges too.
+        let tilt = rotation - 90 * (rotation / 90).rounded()
+        return min(max(tilt / 2, -maxRotation), maxRotation)
+    }
+
+    /// Where a text block of `size`, centred across the page whose left edge is at `originX` and turned `rotation`
+    /// degrees clockwise, starts: at its edge of the page, its bounding box `padding` in.
+    public static func textFootprint(
+        size: CGSize,
+        rotation: Double,
+        canvas: PixelSize,
+        padding: Double,
+        position: TextPosition,
+        originX: Double = 0
+    ) -> PlacedRect {
+        let angle = rotation * .pi / 180
+        let boundsHeight = size.width * abs(sin(angle)) + size.height * cos(angle)
+        let centerY: Double
+        switch position {
+        case .top: centerY = padding + boundsHeight / 2
+        case .bottom: centerY = Double(canvas.height) - padding - boundsHeight / 2
+        }
+        let centerX = originX + Double(canvas.width) / 2
+        return PlacedRect(
+            rect: CGRect(x: centerX - size.width / 2, y: centerY - size.height / 2, width: size.width, height: size.height),
+            rotation: rotation
+        )
+    }
+
+    /// How far `footprint` can move from its edge towards the middle of the page before it comes within `gap` of any of
+    /// `content`. Negative if it already is. `nil` if nothing is in the way.
+    public static func textTravel(_ footprint: PlacedRect, gap: Double, position: TextPosition, content: [PlacedRect]) -> Double? {
+        let padded = PlacedRect(rect: footprint.rect.insetBy(dx: -gap, dy: -gap), rotation: footprint.rotation)
+        return content.compactMap { padded.verticalClearance(to: $0, downward: position == .top) }.min()
     }
 
     public static func compute(_ input: Input) throws -> InsetLayout {

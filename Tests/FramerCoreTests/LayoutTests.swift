@@ -232,6 +232,54 @@ import Testing
         #expect(block.titleRect == CGRect(x: 2050, y: 1790, width: 900, height: 100))
         #expect(block.subtitleRect == CGRect(x: 2050, y: 1910, width: 900, height: 40))
     }
+
+    @Test func shiftMovesTowardsTheMiddle() {
+        func titleY(_ position: TextPosition) -> Double {
+            InsetLayout.textBlock(
+                canvas: PixelSize(1000, 2000), padding: 50, spacing: 0,
+                titleHeight: 100, subtitleHeight: 0, position: position, shift: 30
+            ).titleRect.minY
+        }
+        #expect(titleY(.top) == 80)
+        #expect(titleY(.bottom) == 2000 - 50 - 100 - 30)
+    }
+}
+
+@Suite struct TextFitLayoutTests {
+    let canvas = PixelSize(1000, 2000)
+
+    @Test func rotationFollowsTheNearestContentUnderTheCentre() {
+        func rotation(_ content: [PlacedRect], position: TextPosition = .top) -> Double {
+            InsetLayout.textRotation(canvas: canvas, position: position, content: content, maxRotation: 4)
+        }
+        let high = PlacedRect(rect: CGRect(x: 300, y: 800, width: 400, height: 800), rotation: 6)
+        let low = PlacedRect(rect: CGRect(x: 300, y: 1000, width: 400, height: 800), rotation: -2)
+        let aside = PlacedRect(rect: CGRect(x: 0, y: 300, width: 300, height: 600), rotation: 20)  // misses x = 500
+        #expect(rotation([low, high, aside]) == 3)                  // half of 6
+        #expect(rotation([low, high], position: .bottom) == -1)     // lowest bottom is `low`
+        #expect(rotation([aside]) == 0)
+        #expect(rotation([PlacedRect(rect: high.rect, rotation: -16)]) == -4)
+        #expect(rotation([PlacedRect(rect: high.rect, rotation: 92)]) == 1)   // 2° off sideways
+    }
+
+    @Test func footprintStartsPaddingFromItsEdge() {
+        let level = InsetLayout.textFootprint(size: CGSize(width: 600, height: 200), rotation: 0, canvas: canvas, padding: 50, position: .top, originX: 1000)
+        #expect(level.rect == CGRect(x: 1200, y: 50, width: 600, height: 200))
+        let tilted = InsetLayout.textFootprint(size: CGSize(width: 600, height: 200), rotation: 5, canvas: canvas, padding: 50, position: .bottom)
+        #expect(abs(tilted.bounds.maxY - 1950) < 0.001)
+        #expect(tilted.center.x == 500)
+    }
+
+    @Test func travelStopsGapShortOfTheContent() throws {
+        let text = PlacedRect(rect: CGRect(x: 300, y: 50, width: 400, height: 100))
+        let device = PlacedRect(rect: CGRect(x: 200, y: 600, width: 600, height: 1200))
+        #expect(InsetLayout.textTravel(text, gap: 40, position: .top, content: [device]) == 410)   // 600 - 40 - 150
+        #expect(InsetLayout.textTravel(text, gap: 40, position: .top, content: []) == nil)
+        // A device reaching past the text's edge is on the wrong side: it can't move at all.
+        let behind = PlacedRect(rect: CGRect(x: 200, y: 0, width: 600, height: 120))
+        let travel = try #require(InsetLayout.textTravel(text, gap: 40, position: .top, content: [behind]))
+        #expect(travel < 0)
+    }
 }
 
 @Suite struct PlacementTests {
@@ -251,6 +299,31 @@ import Testing
         let t = PlacedRect(rect: CGRect(x: 100, y: 200, width: 60, height: 120)).transform(from: CGSize(width: 30, height: 60))
         #expect(CGPoint(x: 0, y: 0).applying(t) == CGPoint(x: 100, y: 200))
         #expect(CGPoint(x: 30, y: 60).applying(t) == CGPoint(x: 160, y: 320))
+    }
+
+    @Test func verticalExtentFollowsTheRotatedEdges() throws {
+        // A 100x100 square turned 45° about (50, 50): corners at (50, -20.7), (120.7, 50), (50, 120.7), (-20.7, 50).
+        let diamond = PlacedRect(rect: CGRect(x: 0, y: 0, width: 100, height: 100), rotation: 45)
+        let whole = try #require(diamond.verticalExtent(within: 0...100))
+        #expect(abs(whole.lowerBound - (50 - 50 * 2.0.squareRoot())) < 0.001)
+        // Only the right-hand slope crosses x = 90...100.
+        let slice = try #require(diamond.verticalExtent(within: 90...100))
+        #expect(abs(slice.lowerBound - 19.289) < 0.01)
+        #expect(abs(slice.upperBound - 80.711) < 0.01)
+        #expect(diamond.verticalExtent(within: 200...300) == nil)
+        #expect(PlacedRect(rect: CGRect(x: 10, y: 20, width: 30, height: 40)).verticalExtent(within: 0...15) == 20...60)
+    }
+
+    @Test func clearanceBetweenRotatedRects() throws {
+        let box = PlacedRect(rect: CGRect(x: 0, y: 0, width: 100, height: 100))
+        let below = PlacedRect(rect: CGRect(x: 50, y: 300, width: 100, height: 100))
+        #expect(box.verticalClearance(to: below, downward: true) == 200)
+        #expect(below.verticalClearance(to: box, downward: false) == 200)
+        #expect(box.verticalClearance(to: PlacedRect(rect: CGRect(x: 200, y: 300, width: 10, height: 10)), downward: true) == nil)
+        // Turned 45°, `below`'s top corner is 50·√2 above its centre (100, 350).
+        let diamond = PlacedRect(rect: below.rect, rotation: 45)
+        let clearance = try #require(box.verticalClearance(to: diamond, downward: true))
+        #expect(abs(clearance - (350 - 50 * 2.0.squareRoot() - 100)) < 0.001)
     }
 
     @Test func positiveRotationIsClockwise() {

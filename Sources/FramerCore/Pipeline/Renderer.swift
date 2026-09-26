@@ -211,7 +211,9 @@ public struct Renderer: Sendable {
                     gap: inset.gap ?? padding,
                     deviceScale: inset.deviceScale,
                     bleed: inset.bleed,
-                    shadow: inset.shadow
+                    shadow: inset.shadow,
+                    textScale: inset.textScale,
+                    maxTextRotation: inset.maxTextRotation
                 )
             )
         }

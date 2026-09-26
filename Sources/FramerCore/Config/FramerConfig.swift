@@ -163,17 +163,28 @@ public struct TextConfig: Sendable, Codable, Equatable {
     public var subtitle: FontConfig
     /// Gap between title and subtitle in pixels. Default: 0.4 × subtitle size.
     public var spacing: Double?
+    /// With placed devices, the text scales between these multiples of its size to fit the room they leave.
+    public var minScale: Double
+    public var maxScale: Double
+    /// With placed devices, the most the text may tilt, in degrees, to follow them. 0 keeps it level.
+    public var maxRotation: Double
 
     public init(
         position: TextPosition = .top,
         title: FontConfig = FontConfig(size: 96, weight: .bold, color: .white),
         subtitle: FontConfig = FontConfig(size: 56, weight: .regular, color: RGBAColor(red: 1, green: 1, blue: 1, alpha: 0.8)),
-        spacing: Double? = nil
+        spacing: Double? = nil,
+        minScale: Double = 0.75,
+        maxScale: Double = 1.5,
+        maxRotation: Double = 4
     ) {
         self.position = position
         self.title = title
         self.subtitle = subtitle
         self.spacing = spacing
+        self.minScale = minScale
+        self.maxScale = maxScale
+        self.maxRotation = maxRotation
     }
 
     public init(from decoder: Decoder) throws {
@@ -183,6 +194,9 @@ public struct TextConfig: Sendable, Codable, Equatable {
         title = try c.decodeIfPresent(FontConfig.self, forKey: .title) ?? defaults.title
         subtitle = try c.decodeIfPresent(FontConfig.self, forKey: .subtitle) ?? defaults.subtitle
         spacing = try c.decodeIfPresent(Double.self, forKey: .spacing)
+        minScale = try c.decodeIfPresent(Double.self, forKey: .minScale) ?? defaults.minScale
+        maxScale = try c.decodeIfPresent(Double.self, forKey: .maxScale) ?? defaults.maxScale
+        maxRotation = try c.decodeIfPresent(Double.self, forKey: .maxRotation) ?? defaults.maxRotation
     }
 
     public var resolvedSpacing: Double { spacing ?? (subtitle.size * 0.4).rounded() }

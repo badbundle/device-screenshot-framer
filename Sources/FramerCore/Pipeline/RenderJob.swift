@@ -29,6 +29,10 @@ public struct RenderJob: Sendable, Hashable {
         /// Automatic layout only: size the device by width and let it run off the edge opposite the text.
         public var bleed: Bool
         public var shadow: ShadowSpec?
+        /// With `devices`, how far the text may shrink or grow, as a multiple of its size.
+        public var textScale: ClosedRange<Double>
+        /// With `devices`, the most the text may tilt, in degrees.
+        public var maxTextRotation: Double
         /// Explicitly placed devices, drawn in order. Empty = the job's `input` laid out automatically.
         public var devices: [PlacedDevice]
         public var callouts: [CalloutSpec]
@@ -48,6 +52,8 @@ public struct RenderJob: Sendable, Hashable {
             deviceScale: Double,
             bleed: Bool = false,
             shadow: ShadowSpec? = nil,
+            textScale: ClosedRange<Double> = 0.75...1.5,
+            maxTextRotation: Double = 4,
             devices: [PlacedDevice] = [],
             callouts: [CalloutSpec] = [],
             pages: [Page] = []
@@ -63,6 +69,8 @@ public struct RenderJob: Sendable, Hashable {
             self.deviceScale = deviceScale
             self.bleed = bleed
             self.shadow = shadow
+            self.textScale = textScale
+            self.maxTextRotation = maxTextRotation
             self.devices = devices
             self.callouts = callouts
             self.pages = pages

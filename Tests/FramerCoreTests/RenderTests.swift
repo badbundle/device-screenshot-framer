@@ -315,3 +315,141 @@ import Testing
         }
     }
 }
+
+@Suite struct TextFitTests {
+    let canvas = PixelSize(400, 1000)
+    let style = InsetRenderer.Style(padding: 20, gap: 20)
+
+    func text(_ title: String, subtitle: String = "", position: TextPosition = .top) -> InsetRenderer.Text {
+        InsetRenderer.Text(
+            title: title,
+            subtitle: subtitle,
+            titleStyle: TextStyle(font: FontSpec(size: 30, weight: .bold), color: .white),
+            subtitleStyle: TextStyle(font: FontSpec(size: 20), color: .white),
+            position: position,
+            spacing: 8
+        )
+    }
+
+    /// A 200x400 device in the middle of the page starting at `originX`.
+    func device(top: Double, originX: Double = 0, rotation: Double = 0) -> PlacedRect {
+        PlacedRect(rect: CGRect(x: originX + 100, y: top, width: 200, height: 400), rotation: rotation)
+    }
+
+    func fit(_ pages: [InsetRenderer.Text], around content: [PlacedRect], style: InsetRenderer.Style? = nil) -> [InsetRenderer.FittedText]? {
+        InsetRenderer.fitText(pages, around: content, canvas: canvas, style: style ?? self.style)
+    }
+
+    @Test func growsToTheCapAndSitsGapAboveTheDevice() throws {
+        let fitted = try #require(fit([text("Title", subtitle: "Sub")], around: [device(top: 500)]))[0]
+        #expect(fitted.text.titleStyle.font.size == 45)
+        #expect(fitted.text.subtitleStyle.font.size == 30)
+        #expect(fitted.text.spacing == 12)
+        #expect(fitted.rotation == 0)
+        // 500 - gap.
+        #expect(fitted.block.subtitleRect.maxY <= 480 && fitted.block.subtitleRect.maxY > 479)
+    }
+
+    @Test func bottomTextSitsGapBelowTheDevice() throws {
+        let fitted = try #require(fit([text("Title", position: .bottom)], around: [device(top: 100)]))[0]
+        #expect(fitted.block.titleRect.minY >= 520 && fitted.block.titleRect.minY < 521)
+    }
+
+    @Test func growsOnlyAsFarAsTheRoomAllows() throws {
+        let fitted = try #require(fit([text("Title")], around: [device(top: 90)]))[0]
+        let size = fitted.text.titleStyle.font.size
+        #expect(size > 30 && size < 45)
+        #expect(fitted.block.height <= 90 - 20 - 20)
+    }
+
+    @Test func shrinksWhenADeviceCrowdsIt() throws {
+        let base = text("Title").block(canvas: canvas, padding: 20).height
+        let fitted = try #require(fit([text("Title")], around: [device(top: 20 + base * 0.85 + 20)]))[0]
+        let size = fitted.text.titleStyle.font.size
+        #expect(size >= 22.5 && size < 30)
+        // Below `minScale` it gives up and leaves the text alone.
+        #expect(fit([text("Title")], around: [device(top: 20 + base * 0.6 + 20)]) == nil)
+    }
+
+    @Test func neverWrapsOntoMoreLines() throws {
+        let title = text("A wide title, wider")
+        try #require(title.lineWidths(width: 360).map(\.count) == [1, 0])
+        try #require(title.scaled(by: 1.5).lineWidths(width: 360).map(\.count) == [2, 0])
+        let fitted = try #require(fit([title], around: [device(top: 500)]))[0]
+        let size = fitted.text.titleStyle.font.size
+        #expect(size > 30 && size < 45)
+        #expect(fitted.text.lineWidths(width: 360).map(\.count) == [1, 0])
+    }
+
+    @Test func fixedScaleOnlyMovesTheText() throws {
+        var fixed = style
+        fixed.textScale = 1...1
+        let fitted = try #require(fit([text("Title")], around: [device(top: 500)], style: fixed))[0]
+        #expect(fitted.text == text("Title"))
+        #expect(fitted.block.titleRect.minY > 400)
+    }
+
+    @Test func tiltsWithTheDeviceAndKeepsTheGap() throws {
+        let tilted = device(top: 500, rotation: -16)
+        let fitted = try #require(fit([text("Title", subtitle: "Sub")], around: [tilted]))[0]
+        #expect(fitted.rotation == -4)
+        // The turned block, grown by `gap`, only just clears the device.
+        let footprint = PlacedRect(rect: fitted.block.titleRect.union(fitted.block.subtitleRect), rotation: fitted.rotation)
+        let clearance = try #require(footprint.verticalClearance(to: tilted, downward: true))
+        #expect(clearance >= 20 && clearance < 30)
+
+        var level = style
+        level.maxTextRotation = 0
+        #expect(try #require(fit([text("Title")], around: [tilted], style: level))[0].rotation == 0)
+    }
+
+    @Test func leavesTheTextAloneWhenThereIsNothingToFit() {
+        // Nothing in the way.
+        let aside = PlacedRect(rect: CGRect(x: -300, y: 200, width: 310, height: 400))
+        #expect(fit([text("Title")], around: [aside]) == nil)
+        // No text.
+        #expect(fit([text("")], around: [device(top: 500)]) == nil)
+    }
+
+    @Test func panoramaPagesShareScaleAndTravel() throws {
+        // Page 3 has nothing in the way.
+        let fitted = try #require(fit(
+            [text("One"), text("Two"), text("Three")],
+            around: [device(top: 600), device(top: 300, originX: 400)]
+        ))
+        #expect(Set(fitted.map(\.text.titleStyle.font.size)) == [45])
+        #expect(Set(fitted.map(\.block.titleRect.minY)).count == 1)
+        // The higher device, on page 2, decides how far every page moves.
+        #expect(fitted[1].block.titleRect.maxY <= 280 && fitted[1].block.titleRect.maxY > 279)
+    }
+
+    @Test func rendersTheTextJustAboveAPlacedDevice() throws {
+        // Device 200x400 at (100, 500).
+        let layer = InsetRenderer.Layer(framed: Synthetic.framed(), placement: DevicePlacement(x: 0.5, y: 0.7, width: 0.5))
+        let out = Bitmap(try InsetRenderer.render(
+            layers: [layer], canvas: canvas, background: GradientSpec(solid: RGBAColor(red: 0, green: 0, blue: 1)),
+            pages: [text("Title")], style: style
+        )[0])
+        func hasInk(_ rows: Range<Int>) -> Bool {
+            rows.contains { y in (0..<400).contains { x in out[x, y].isClose(to: .white, tolerance: 60) } }
+        }
+        #expect(!hasInk(0..<400))
+        #expect(hasInk(420..<480))
+        #expect(!hasInk(481..<500))
+    }
+
+    @Test func rendersTiltedText() throws {
+        let tilted = InsetRenderer.Layer(framed: Synthetic.framed(), placement: DevicePlacement(x: 0.5, y: 0.7, width: 0.5, rotation: 8))
+        let out = Bitmap(try InsetRenderer.render(
+            layers: [tilted], canvas: canvas, background: GradientSpec(solid: RGBAColor(red: 0, green: 0, blue: 1)),
+            pages: [text("—————")], style: style
+        )[0])
+        // A clockwise tilt puts the right end of the line lower than the left.
+        func inkRows(_ columns: Range<Int>) -> [Int] {
+            (0..<500).filter { y in columns.contains { x in out[x, y].isClose(to: .white, tolerance: 60) } }
+        }
+        let left = try #require(inkRows(110..<140).first)
+        let right = try #require(inkRows(260..<290).first)
+        #expect(right > left + 5)
+    }
+}
