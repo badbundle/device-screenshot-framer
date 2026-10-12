@@ -476,7 +476,7 @@ final class FakeServer: Sendable {
         let (outcomes, failures) = await renderer.run([job])
         #expect(failures.isEmpty, "\(failures.map { "\($0.1)" })")
         let outcome = try #require(outcomes.first)
-        #expect(outcome.device.name == "iPhone 17 Pro")
+        #expect(outcome.device?.name == "iPhone 17 Pro")
         // width 600 -> height follows the framed aspect (300x600 frame => 1200), capped at native 2622.
         #expect(outcome.size == PixelSize(600, 1200))
         let bitmap = Bitmap(try ImageLoader.load(outcome.output))

@@ -1,0 +1,13 @@
+{
+  "outputDirectory": "raw",
+  "output": { "width": 2560, "height": 1600 },
+  "mode": "inset",
+  "frame": "window",
+  "background": { "colors": ["#1E3A8A", "#0EA5E9", "#F0ABFC"], "angle": 135 },
+  "screenshots": [
+    {
+      "output": "mac-desktop",
+      "devices": [{ "path": "raw/mac-window.png", "x": 0.5, "y": 0.52, "width": 0.78 }]
+    }
+  ]
+}

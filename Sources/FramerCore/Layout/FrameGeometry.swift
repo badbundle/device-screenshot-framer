@@ -1,6 +1,7 @@
 import CoreGraphics
 
-/// Screen cutout position inside a portrait frame PNG, as stored in frameit's offsets.json.
+/// Screen cutout position inside a frame PNG, as stored in frameit's offsets.json (under "portrait", even for the
+/// landscape Mac frames).
 public struct FrameOffset: Hashable, Sendable {
     public var x: Int
     public var y: Int
@@ -30,14 +31,15 @@ public struct OrientedGeometry: Sendable {
     public var canvasSize: PixelSize
     /// Screen cutout in the oriented canvas.
     public var cutout: CGRect
-    /// Transform to apply to a CGContext (y-up) before drawing the *portrait* frame image into `frameDrawRect`.
+    /// Transform to apply to a CGContext (y-up) before drawing the frame image, as stored, into `frameDrawRect`.
     public var frameTransform: CGAffineTransform
-    /// Rect the portrait frame is drawn into, in the transformed (y-up) space.
+    /// Rect the frame image is drawn into, in the transformed (y-up) space.
     public var frameDrawRect: CGRect
 }
 
 public enum FrameGeometry {
-    /// Cutout rect in portrait frame space. Height is derived from the frame device's native aspect.
+    /// Cutout rect in the frame image as stored (portrait, or landscape for Mac). Height is derived from the frame
+    /// device's native aspect.
     public static func portraitCutout(offset: FrameOffset, frameScreenSize: PixelSize) -> CGRect {
         let height = (Double(offset.width) * Double(frameScreenSize.height) / Double(frameScreenSize.width)).rounded()
         return CGRect(x: Double(offset.x), y: Double(offset.y), width: Double(offset.width), height: height)
@@ -54,51 +56,51 @@ public enum FrameGeometry {
         }
     }
 
-    /// Orients a portrait frame for the requested output orientation.
+    /// Orients a frame drawn in `frameOrientation` for the requested output orientation, turning it a quarter if they
+    /// differ.
     public static func oriented(
         frameSize: PixelSize,
         cutout: CGRect,
         orientation: Orientation,
-        side: LandscapeSide
+        side: LandscapeSide,
+        frameOrientation: Orientation = .portrait
     ) -> OrientedGeometry {
         let wf = Double(frameSize.width)
         let hf = Double(frameSize.height)
-        let portraitDrawRect = CGRect(x: 0, y: 0, width: wf, height: hf)
+        let drawRect = CGRect(x: 0, y: 0, width: wf, height: hf)
 
-        switch orientation {
-        case .portrait:
+        guard orientation != frameOrientation else {
             return OrientedGeometry(
                 canvasSize: frameSize,
                 cutout: cutout,
                 frameTransform: .identity,
-                frameDrawRect: portraitDrawRect
+                frameDrawRect: drawRect
             )
-        case .landscape:
-            let canvas = frameSize.swapped
-            switch side {
-            case .left:
-                // 90° CCW. Top-left mapping: (x, y) -> (y, wf - x)
-                let rotated = CGRect(
-                    x: cutout.minY,
-                    y: wf - cutout.maxX,
-                    width: cutout.height,
-                    height: cutout.width
-                )
-                // CG (y-up): (x, y) -> (hf - y, x)
-                let transform = CGAffineTransform(translationX: hf, y: 0).rotated(by: .pi / 2)
-                return OrientedGeometry(canvasSize: canvas, cutout: rotated, frameTransform: transform, frameDrawRect: portraitDrawRect)
-            case .right:
-                // 90° CW. Top-left mapping: (x, y) -> (hf - y, x)
-                let rotated = CGRect(
-                    x: hf - cutout.maxY,
-                    y: cutout.minX,
-                    width: cutout.height,
-                    height: cutout.width
-                )
-                // CG (y-up): (x, y) -> (y, wf - x)
-                let transform = CGAffineTransform(translationX: 0, y: wf).rotated(by: -.pi / 2)
-                return OrientedGeometry(canvasSize: canvas, cutout: rotated, frameTransform: transform, frameDrawRect: portraitDrawRect)
-            }
+        }
+        let canvas = frameSize.swapped
+        switch side {
+        case .left:
+            // 90° CCW. Top-left mapping: (x, y) -> (y, wf - x)
+            let rotated = CGRect(
+                x: cutout.minY,
+                y: wf - cutout.maxX,
+                width: cutout.height,
+                height: cutout.width
+            )
+            // CG (y-up): (x, y) -> (hf - y, x)
+            let transform = CGAffineTransform(translationX: hf, y: 0).rotated(by: .pi / 2)
+            return OrientedGeometry(canvasSize: canvas, cutout: rotated, frameTransform: transform, frameDrawRect: drawRect)
+        case .right:
+            // 90° CW. Top-left mapping: (x, y) -> (hf - y, x)
+            let rotated = CGRect(
+                x: hf - cutout.maxY,
+                y: cutout.minX,
+                width: cutout.height,
+                height: cutout.width
+            )
+            // CG (y-up): (x, y) -> (y, wf - x)
+            let transform = CGAffineTransform(translationX: 0, y: wf).rotated(by: -.pi / 2)
+            return OrientedGeometry(canvasSize: canvas, cutout: rotated, frameTransform: transform, frameDrawRect: drawRect)
         }
     }
 

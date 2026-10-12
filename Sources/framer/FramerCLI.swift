@@ -6,7 +6,7 @@ import FramerCore
 struct FramerCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "framer",
-        abstract: "Frame iOS and iPadOS screenshots in Apple device frames.",
+        abstract: "Frame iOS, iPadOS and macOS screenshots in Apple device frames, or as Mac windows.",
         discussion: """
             Frames are downloaded on demand from fastlane/frameit-frames and cached in
             ~/Library/Caches/device-screenshot-framer (override with --cache-dir or FRAMER_CACHE_DIR).
@@ -35,6 +35,7 @@ struct GlobalOptions: ParsableArguments {
 }
 
 extension LandscapeSide: ExpressibleByArgument {}
+extension FrameStyle: ExpressibleByArgument {}
 extension OutputFormat: ExpressibleByArgument {}
 
 enum CLIError: Error, CustomStringConvertible {
@@ -54,8 +55,9 @@ func runJobs(_ jobs: [RenderJob], options: GlobalOptions) async throws {
 
     for outcome in outcomes {
         let devices = outcome.screens.map { screen in
-            let frameNote = screen.device.usesBorrowedFrame ? " (\(screen.device.framePrefix.replacingOccurrences(of: "Apple ", with: "")) frame)" : ""
-            return "\(screen.device.name), \(screen.frame.color)\(frameNote)"
+            guard let device = screen.device, let frame = screen.frame else { return "window" }
+            let frameNote = device.usesBorrowedFrame ? " (\(device.framePrefix.replacingOccurrences(of: "Apple ", with: "")) frame)" : ""
+            return "\(device.name), \(frame.color)\(frameNote)"
         }
         for output in outcome.outputs {
             print("✓ \(output.path)  [\(devices.joined(separator: " + ")), \(outcome.size)]")

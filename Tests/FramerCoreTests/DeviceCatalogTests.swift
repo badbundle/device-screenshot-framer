@@ -34,6 +34,32 @@ import Testing
         #expect(result?.orientation == .landscape)
     }
 
+    @Test(arguments: [
+        (PixelSize(3072, 1920), "MacBook Pro 16"),
+        (PixelSize(2880, 1800), "MacBook Pro 15"),
+        (PixelSize(2560, 1600), "MacBook Air"),
+        (PixelSize(1440, 900), "MacBook Air (13-inch, 2017)"),
+        (PixelSize(1280, 800), "MacBook Pro (13-inch, 2012)"),
+    ])
+    func detectsMacs(_ size: PixelSize, _ expected: String) {
+        let result = DeviceCatalog.detect(size)
+        #expect(result?.device.name == expected)
+        #expect(result?.orientation == .landscape)
+        #expect(result?.device.canRotate == false)
+    }
+
+    @Test func everyMacAppStoreSizeIsDetected() {
+        for size in DeviceCatalog.macAppStoreSizes {
+            #expect(DeviceCatalog.detect(size)?.device.isMac == true, "\(size)")
+            #expect(size.width * 10 == size.height * 16, "\(size) is 16:10")
+        }
+    }
+
+    @Test func macsDontTurn() {
+        #expect(DeviceCatalog.detect(PixelSize(1600, 2560)) == nil)
+        #expect(DeviceCatalog.detect(PixelSize(1800, 2880)) == nil)
+    }
+
     @Test func unknownSizeIsNil() {
         #expect(DeviceCatalog.detect(PixelSize(1000, 1000)) == nil)
         #expect(DeviceCatalog.detect(PixelSize(1488, 2266)) == nil) // iPad mini 6/7: deliberately unsupported
@@ -43,6 +69,7 @@ import Testing
         #expect(DeviceCatalog.named("iphone 16 pro")?.name == "iPhone 16 Pro")
         #expect(DeviceCatalog.named("iPhone 15 Pro")?.name == "iPhone 16")
         #expect(DeviceCatalog.named("iPad Pro 13")?.name == "iPad Pro 13-inch (M4)")
+        #expect(DeviceCatalog.named("macbook pro (16-inch)")?.name == "MacBook Pro 16")
         #expect(DeviceCatalog.named("Nokia") == nil)
     }
 
@@ -52,7 +79,8 @@ import Testing
             #expect(device.colors.contains(device.defaultColor), "\(device.name) default colour not in colours")
             #expect(!seen.contains(device.name), "duplicate device \(device.name)")
             seen.insert(device.name)
-            #expect(device.screenSize.width < device.screenSize.height, "\(device.name) screen size must be portrait")
+            #expect(device.screenSize.isLandscape == (device.frameOrientation == .landscape), "\(device.name) screen size must match its frame's orientation")
+            #expect(device.isMac == (device.frameOrientation == .landscape), "\(device.name): only Macs are drawn landscape")
             if let frameScreen = device.frameScreenSize {
                 // Borrowed frames must be close in aspect so aspect-fill crops little.
                 let ratio = device.screenSize.aspect / frameScreen.aspect
@@ -73,5 +101,7 @@ import Testing
         #expect(air.frameFilename(color: "Sky Blue") == "Apple iPad Air (2019) 2020 Sky Blue Portrait.png")
         let pro = DeviceCatalog.named("iPhone 17 Pro")!
         #expect(pro.frameFilename(color: "Deep Blue") == "Apple iPhone 17 Pro Deep Blue.png")
+        let mac = DeviceCatalog.named("MacBook Air")!
+        #expect(mac.frameFilename(color: "Space Gray") == "Apple MacBook Air Space Gray.png")
     }
 }

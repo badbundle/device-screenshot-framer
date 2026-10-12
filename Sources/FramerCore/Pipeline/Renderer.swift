@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// Orchestrates one job: detect device → fetch frame → composite → mode render → write.
+/// Orchestrates one job: detect device → fetch frame (or draw a window) → composite → mode render → write.
 /// `prepare` is async (network); `render` is synchronous and keeps every CG/CT object on one task.
 public struct Renderer: Sendable {
     public var store: FrameStore
@@ -12,14 +12,15 @@ public struct Renderer: Sendable {
         self.verbose = verbose
     }
 
-    /// One screenshot with its detected device and resolved frame.
+    /// One screenshot with its detected device and resolved frame, or shown as a window, which has neither.
     public struct Screen: Sendable {
         public var input: URL
-        public var device: Device
+        public var frameStyle: FrameStyle
+        public var device: Device?
         public var orientation: Orientation
         public var landscapeSide: LandscapeSide
         public var screenshotSize: PixelSize
-        public var frame: FrameStore.ResolvedFrame
+        public var frame: FrameStore.ResolvedFrame?
     }
 
     public struct Prepared: Sendable {
@@ -27,10 +28,10 @@ public struct Renderer: Sendable {
         /// One per device, in drawing order. The first is the primary screenshot.
         public var screens: [Screen]
 
-        public var device: Device { screens[0].device }
+        public var device: Device? { screens[0].device }
         public var orientation: Orientation { screens[0].orientation }
         public var screenshotSize: PixelSize { screens[0].screenshotSize }
-        public var frame: FrameStore.ResolvedFrame { screens[0].frame }
+        public var frame: FrameStore.ResolvedFrame? { screens[0].frame }
     }
 
     public struct Outcome: Sendable {
@@ -42,12 +43,13 @@ public struct Renderer: Sendable {
         public var size: PixelSize
 
         public var output: URL { outputs[0] }
-        public var device: Device { screens[0].device }
-        public var frameColor: String { screens[0].frame.color }
+        public var device: Device? { screens[0].device }
+        public var frameColor: String? { screens[0].frame?.color }
     }
 
-    /// Resolves the devices and frames for a job, downloading frames if needed.
-    public func prepare(_ job: RenderJob, manifest: FrameManifest) async throws -> Prepared {
+    /// Resolves the devices and frames for a job, downloading frames if needed. `manifest` may be `nil` only when every
+    /// screenshot is shown as a window.
+    public func prepare(_ job: RenderJob, manifest: FrameManifest?) async throws -> Prepared {
         var screens: [Screen] = []
         for source in job.sources {
             screens.append(try await prepareScreen(source, manifest: manifest))
@@ -58,16 +60,28 @@ public struct Renderer: Sendable {
         return Prepared(job: job, screens: screens)
     }
 
-    private func prepareScreen(_ source: RenderJob.Source, manifest: FrameManifest) async throws -> Screen {
+    private func prepareScreen(_ source: RenderJob.Source, manifest: FrameManifest?) async throws -> Screen {
         let size = try ImageLoader.size(of: source.input)
+
+        if source.frameStyle == .window {
+            return Screen(
+                input: source.input,
+                frameStyle: .window,
+                device: nil,
+                orientation: size.isLandscape ? .landscape : .portrait,
+                landscapeSide: source.landscapeSide,
+                screenshotSize: size,
+                frame: nil
+            )
+        }
 
         let device: Device
         let orientation: Orientation
         if let name = source.deviceName {
             guard let forced = DeviceCatalog.named(name) else { throw FramerError.unknownDeviceName(name) }
             device = forced
-            orientation = size.isLandscape ? .landscape : .portrait
-            if size != device.screenSize && size != device.screenSize.swapped {
+            orientation = forced.canRotate ? (size.isLandscape ? .landscape : .portrait) : forced.frameOrientation
+            if size != device.screenSize && !(device.canRotate && size == device.screenSize.swapped) {
                 Log.warn("\(source.input.lastPathComponent) is \(size), not \(device.name)'s \(device.screenSize); screenshot will be scaled to fill the frame")
             }
         } else {
@@ -81,9 +95,11 @@ public struct Renderer: Sendable {
             Log.info("\(device.name) has no dedicated frame; using \(device.framePrefix) frame")
         }
 
+        guard let manifest else { throw FramerError.config("\(device.name) needs the frames manifest") }
         let frame = try await store.frame(for: device, color: source.frameColor, manifest: manifest)
         return Screen(
             input: source.input,
+            frameStyle: .device,
             device: device,
             orientation: orientation,
             landscapeSide: source.landscapeSide,
@@ -114,24 +130,29 @@ public struct Renderer: Sendable {
         var fill: (rect: CGRect, scale: Double)
     }
 
-    private func frame(_ screen: Screen) throws -> FramedScreen {
+    private func frame(_ screen: Screen, window: WindowStyle) throws -> FramedScreen {
         let screenshot = try ImageLoader.load(screen.input)
-        let frameImage = try ImageLoader.load(screen.frame.fileURL)
+        guard let device = screen.device, let resolved = screen.frame else {
+            let framed = WindowCompositor.composite(screenshot, style: window)
+            return FramedScreen(framed: framed, screenshot: screenshot, fill: (CGRect(origin: .zero, size: framed.pixelSize.cgSize), 1))
+        }
+        let frameImage = try ImageLoader.load(resolved.fileURL)
 
-        let cutout = FrameGeometry.portraitCutout(offset: screen.frame.offset, frameScreenSize: screen.device.effectiveFrameScreenSize)
-        try FrameGeometry.validate(cutout: cutout, frameSize: frameImage.pixelSize, filename: screen.frame.filename)
+        let cutout = FrameGeometry.portraitCutout(offset: resolved.offset, frameScreenSize: device.effectiveFrameScreenSize)
+        try FrameGeometry.validate(cutout: cutout, frameSize: frameImage.pixelSize, filename: resolved.filename)
         let geometry = FrameGeometry.oriented(
             frameSize: frameImage.pixelSize,
             cutout: cutout,
             orientation: screen.orientation,
-            side: screen.landscapeSide
+            side: screen.landscapeSide,
+            frameOrientation: device.frameOrientation
         )
 
         let framed = FrameCompositor.composite(FrameCompositor.Input(
             screenshot: screenshot,
             frame: frameImage,
             geometry: geometry,
-            cornerRadius: screen.device.cornerRadius
+            cornerRadius: device.cornerRadius
         ))
         let fill = FrameGeometry.aspectFill(content: screenshot.pixelSize, into: geometry.cutout)
         return FramedScreen(framed: framed, screenshot: screenshot, fill: fill)
@@ -140,17 +161,21 @@ public struct Renderer: Sendable {
     /// Renders and writes the output image(s).
     public func render(_ prepared: Prepared) throws -> Outcome {
         let job = prepared.job
-        let screens = try prepared.screens.map(frame)
+        let screens = try prepared.screens.map { try frame($0, window: job.window) }
         let primary = screens[0]
 
+        // The Mac App Store takes the same sizes from any Mac, so a Mac screenshot's canvas is its largest, not the
+        // capture's own size: a window has none, and a MacBook's screen is rarely one of them.
+        let isMac = prepared.screens[0].frameStyle == .window || prepared.screens[0].device?.isMac == true
         let sizing = OutputSizing.resolve(
             requestedWidth: job.requestedWidth,
             requestedHeight: job.requestedHeight,
-            native: primary.screenshot.pixelSize,
-            framedSize: primary.framed.pixelSize
+            native: isMac ? DeviceCatalog.macCanvas : primary.screenshot.pixelSize,
+            framedSize: isMac ? DeviceCatalog.macCanvas : primary.framed.pixelSize
         )
         if sizing.clamped {
-            Log.warn("requested output exceeds native \(primary.screenshot.pixelSize) for \(job.input.lastPathComponent); clamped to \(sizing.size)")
+            let limit = isMac ? "\(DeviceCatalog.macCanvas), the largest Mac App Store size," : "native \(primary.screenshot.pixelSize)"
+            Log.warn("requested output exceeds \(limit) for \(job.input.lastPathComponent); clamped to \(sizing.size)")
         }
         let canvas = sizing.size
 
@@ -175,9 +200,12 @@ public struct Renderer: Sendable {
                 Log.warn("\(job.input.lastPathComponent): inset mode with no title or subtitle")
             }
 
+            let shadows = prepared.screens.map { $0.frameStyle == .window ? ShadowSpec() : nil }
             let layers = inset.devices.isEmpty
-                ? [InsetRenderer.Layer(framed: primary.framed)]
-                : zip(screens, inset.devices).map { InsetRenderer.Layer(framed: $0.framed, placement: $1.placement) }
+                ? [InsetRenderer.Layer(framed: primary.framed, shadow: shadows[0])]
+                : zip(screens, inset.devices).enumerated().map { index, pair in
+                    InsetRenderer.Layer(framed: pair.0.framed, placement: pair.1.placement, shadow: shadows[index])
+                }
             let callouts = try inset.callouts.map { spec -> InsetRenderer.Callout in
                 let screen = screens[spec.device]
                 guard let crop = screen.screenshot.cropping(to: spec.region) else {
@@ -198,7 +226,7 @@ public struct Renderer: Sendable {
                 }
             )
 
-            let padding = inset.padding ?? (Double(canvas.width) * 0.05).rounded()
+            let padding = inset.padding ?? (canvas.shorterSide * 0.05).rounded()
             results = try InsetRenderer.render(
                 layers: layers,
                 callouts: callouts,
@@ -241,11 +269,13 @@ public struct Renderer: Sendable {
         var outcomes: [Outcome] = []
         var failures: [(RenderJob, Error)] = []
 
-        let manifest: FrameManifest
-        do {
-            manifest = try await store.manifest()
-        } catch {
-            return ([], jobs.map { ($0, error) })
+        var manifest: FrameManifest?
+        if jobs.contains(where: \.needsFrames) {
+            do {
+                manifest = try await store.manifest()
+            } catch {
+                return ([], jobs.map { ($0, error) })
+            }
         }
 
         for job in jobs {

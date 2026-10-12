@@ -66,15 +66,18 @@ public enum InsetRenderer {
         }
     }
 
-    /// A framed device to draw.
+    /// A framed device or window to draw.
     public struct Layer {
         public var framed: CGImage
         /// `nil` = automatic layout under/over the text (single device, single page only).
         public var placement: DevicePlacement?
+        /// The shadow it casts when the style has none: a window's own.
+        public var shadow: ShadowSpec?
 
-        public init(framed: CGImage, placement: DevicePlacement? = nil) {
+        public init(framed: CGImage, placement: DevicePlacement? = nil, shadow: ShadowSpec? = nil) {
             self.framed = framed
             self.placement = placement
+            self.shadow = shadow
         }
     }
 
@@ -176,7 +179,7 @@ public enum InsetRenderer {
 
         for (layer, rect) in zip(layers, placed) {
             ctx.saveGState()
-            style.shadow?.apply(to: ctx, pageWidth: pageWidth)
+            (style.shadow ?? layer.shadow)?.apply(to: ctx, page: canvas)
             ctx.draw(layer.framed, placed: rect)
             ctx.restoreGState()
         }
@@ -184,8 +187,8 @@ public enum InsetRenderer {
         for (callout, layout) in zip(callouts, calloutLayouts) where callout.spec.highlight {
             CalloutRenderer.highlight(
                 layout.source,
-                lineWidth: max(2, (pageWidth * 0.004).rounded()),
-                cornerRadius: callout.spec.resolvedCornerRadius(pageWidth: pageWidth) / callout.spec.scale,
+                lineWidth: max(2, (canvas.shorterSide * 0.004).rounded()),
+                cornerRadius: callout.spec.resolvedCornerRadius(page: canvas) / callout.spec.scale,
                 color: callout.spec.borderColor,
                 ctx: ctx
             )
@@ -196,12 +199,12 @@ public enum InsetRenderer {
             let card = CalloutRenderer.card(
                 callout.image,
                 size: size,
-                cornerRadius: callout.spec.resolvedCornerRadius(pageWidth: pageWidth),
-                borderWidth: callout.spec.resolvedBorderWidth(pageWidth: pageWidth),
+                cornerRadius: callout.spec.resolvedCornerRadius(page: canvas),
+                borderWidth: callout.spec.resolvedBorderWidth(page: canvas),
                 borderColor: callout.spec.borderColor
             )
             ctx.saveGState()
-            callout.spec.shadow.resolve(inheriting: style.shadow)?.apply(to: ctx, pageWidth: pageWidth)
+            callout.spec.shadow.resolve(inheriting: style.shadow)?.apply(to: ctx, page: canvas)
             ctx.draw(card, placed: layout.card)
             ctx.restoreGState()
         }

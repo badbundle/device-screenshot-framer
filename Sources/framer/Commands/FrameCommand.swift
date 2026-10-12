@@ -20,6 +20,9 @@ struct FrameCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Output height in pixels (default: screenshot height).")
     var height: Int?
 
+    @Option(name: .long, help: "device: an Apple device frame. window: a frameless Mac window, for any size of screenshot.")
+    var frame: FrameStyle = .device
+
     @Option(name: .long, help: "Force a device, e.g. \"iPhone 17 Pro\". See list-devices.")
     var device: String?
 
@@ -55,6 +58,7 @@ struct FrameCommand: AsyncParsableCommand {
                 outputBase: outputDirectory.appendingPathComponent(input.deletingPathExtension().lastPathComponent),
                 format: format,
                 mode: .simple,
+                frameStyle: frame,
                 deviceName: device,
                 frameColor: color,
                 landscapeSide: landscapeSide,

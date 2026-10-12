@@ -34,9 +34,9 @@ public struct CalloutSpec: Sendable, Hashable {
     public var scale: Double
     /// Degrees clockwise. `nil` matches the device's rotation.
     public var rotation: Double?
-    /// Pixels. `nil` = 3 % of the page width.
+    /// Pixels. `nil` = 3 % of the page's shorter side.
     public var cornerRadius: Double?
-    /// Pixels. `nil` = 0.8 % of the page width. 0 for no border.
+    /// Pixels. `nil` = 0.8 % of the page's shorter side. 0 for no border.
     public var borderWidth: Double?
     public var borderColor: RGBAColor
     /// Outline the magnified region on the device.
@@ -73,8 +73,8 @@ public struct CalloutSpec: Sendable, Hashable {
         self.shadow = shadow
     }
 
-    public func resolvedCornerRadius(pageWidth: Double) -> Double { cornerRadius ?? (pageWidth * 0.03).rounded() }
-    public func resolvedBorderWidth(pageWidth: Double) -> Double { borderWidth ?? (pageWidth * 0.008).rounded() }
+    public func resolvedCornerRadius(page: PixelSize) -> Double { cornerRadius ?? (page.shorterSide * 0.03).rounded() }
+    public func resolvedBorderWidth(page: PixelSize) -> Double { borderWidth ?? (page.shorterSide * 0.008).rounded() }
 
     // CGRect is only Hashable from macOS 15, and the package deploys to macOS 14.
     public func hash(into hasher: inout Hasher) {

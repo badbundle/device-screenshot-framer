@@ -12,6 +12,10 @@ public struct FramerConfig: Sendable, Codable, Equatable {
     public var outputDirectory: String
     public var output: OutputConfig
     public var mode: RenderMode
+    /// Device frame or Mac window, for every entry and device that doesn't set its own.
+    public var frame: FrameStyle
+    /// How screenshots shown as windows look.
+    public var window: WindowConfig
     public var device: String?
     public var frameColor: String?
     public var landscapeSide: LandscapeSide
@@ -32,6 +36,8 @@ public struct FramerConfig: Sendable, Codable, Equatable {
         outputDirectory: String = "framed",
         output: OutputConfig = OutputConfig(),
         mode: RenderMode = .simple,
+        frame: FrameStyle = .device,
+        window: WindowConfig = WindowConfig(),
         device: String? = nil,
         frameColor: String? = nil,
         landscapeSide: LandscapeSide = .left,
@@ -47,6 +53,8 @@ public struct FramerConfig: Sendable, Codable, Equatable {
         self.outputDirectory = outputDirectory
         self.output = output
         self.mode = mode
+        self.frame = frame
+        self.window = window
         self.device = device
         self.frameColor = frameColor
         self.landscapeSide = landscapeSide
@@ -65,6 +73,8 @@ public struct FramerConfig: Sendable, Codable, Equatable {
         outputDirectory = try c.decodeIfPresent(String.self, forKey: .outputDirectory) ?? "framed"
         output = try c.decodeIfPresent(OutputConfig.self, forKey: .output) ?? OutputConfig()
         mode = try c.decodeIfPresent(RenderMode.self, forKey: .mode) ?? .simple
+        frame = try c.decodeIfPresent(FrameStyle.self, forKey: .frame) ?? .device
+        window = try c.decodeIfPresent(WindowConfig.self, forKey: .window) ?? WindowConfig()
         device = try c.decodeIfPresent(String.self, forKey: .device)
         frameColor = try c.decodeIfPresent(String.self, forKey: .frameColor)
         landscapeSide = try c.decodeIfPresent(LandscapeSide.self, forKey: .landscapeSide) ?? .left
@@ -201,6 +211,36 @@ public struct BackgroundImageConfig: Sendable, Codable, Equatable {
     public var placement: DevicePlacement { DevicePlacement(x: x, y: y, width: width, rotation: rotation) }
 }
 
+public struct WindowConfig: Sendable, Codable, Equatable {
+    /// Screenshot pixels.
+    public var cornerRadius: Double
+    /// Screenshot pixels. 0 for none.
+    public var borderWidth: Double
+    public var borderColor: RGBAColor
+
+    public init(
+        cornerRadius: Double = WindowStyle().cornerRadius,
+        borderWidth: Double = WindowStyle().borderWidth,
+        borderColor: RGBAColor = WindowStyle().borderColor
+    ) {
+        self.cornerRadius = cornerRadius
+        self.borderWidth = borderWidth
+        self.borderColor = borderColor
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = WindowConfig()
+        cornerRadius = try c.decodeIfPresent(Double.self, forKey: .cornerRadius) ?? defaults.cornerRadius
+        borderWidth = try c.decodeIfPresent(Double.self, forKey: .borderWidth) ?? defaults.borderWidth
+        borderColor = try c.decodeIfPresent(RGBAColor.self, forKey: .borderColor) ?? defaults.borderColor
+    }
+
+    public var style: WindowStyle {
+        WindowStyle(cornerRadius: cornerRadius, borderWidth: borderWidth, borderColor: borderColor)
+    }
+}
+
 public struct ShadowConfig: Sendable, Codable, Equatable {
     public var color: RGBAColor
     /// Blur radius in pixels. Default: 5 % of canvas width.
@@ -320,6 +360,7 @@ public struct ScreenshotEntry: Sendable, Codable, Equatable {
     public var subtitle: String?
     /// Part of `title` drawn in `text.accentColor`.
     public var accent: String?
+    public var frame: FrameStyle?
     public var device: String?
     public var frameColor: String?
     /// Output file name without extension. Default: input basename.
@@ -339,6 +380,7 @@ public struct ScreenshotEntry: Sendable, Codable, Equatable {
         title: String? = nil,
         subtitle: String? = nil,
         accent: String? = nil,
+        frame: FrameStyle? = nil,
         device: String? = nil,
         frameColor: String? = nil,
         output: String? = nil,
@@ -353,6 +395,7 @@ public struct ScreenshotEntry: Sendable, Codable, Equatable {
         self.title = title
         self.subtitle = subtitle
         self.accent = accent
+        self.frame = frame
         self.device = device
         self.frameColor = frameColor
         self.output = output
@@ -373,6 +416,7 @@ public struct DeviceEntry: Sendable, Codable, Equatable {
     public var width: Double
     /// Degrees clockwise.
     public var rotation: Double
+    public var frame: FrameStyle?
     public var device: String?
     public var frameColor: String?
     public var landscapeSide: LandscapeSide?
@@ -383,6 +427,7 @@ public struct DeviceEntry: Sendable, Codable, Equatable {
         y: Double = 0.5,
         width: Double = 0.8,
         rotation: Double = 0,
+        frame: FrameStyle? = nil,
         device: String? = nil,
         frameColor: String? = nil,
         landscapeSide: LandscapeSide? = nil
@@ -392,6 +437,7 @@ public struct DeviceEntry: Sendable, Codable, Equatable {
         self.y = y
         self.width = width
         self.rotation = rotation
+        self.frame = frame
         self.device = device
         self.frameColor = frameColor
         self.landscapeSide = landscapeSide
@@ -405,6 +451,7 @@ public struct DeviceEntry: Sendable, Codable, Equatable {
         y = try c.decodeIfPresent(Double.self, forKey: .y) ?? defaults.y
         width = try c.decodeIfPresent(Double.self, forKey: .width) ?? defaults.width
         rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? defaults.rotation
+        frame = try c.decodeIfPresent(FrameStyle.self, forKey: .frame)
         device = try c.decodeIfPresent(String.self, forKey: .device)
         frameColor = try c.decodeIfPresent(String.self, forKey: .frameColor)
         landscapeSide = try c.decodeIfPresent(LandscapeSide.self, forKey: .landscapeSide)
