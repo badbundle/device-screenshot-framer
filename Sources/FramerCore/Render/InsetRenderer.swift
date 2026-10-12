@@ -10,6 +10,8 @@ public enum InsetRenderer {
         public var position: TextPosition
         /// Gap between title and subtitle.
         public var spacing: Double
+        /// Part of the title drawn in another colour.
+        public var accent: TextAccent?
 
         public init(
             title: String,
@@ -17,7 +19,8 @@ public enum InsetRenderer {
             titleStyle: TextStyle,
             subtitleStyle: TextStyle,
             position: TextPosition,
-            spacing: Double
+            spacing: Double,
+            accent: TextAccent? = nil
         ) {
             self.title = title
             self.subtitle = subtitle
@@ -25,6 +28,7 @@ public enum InsetRenderer {
             self.subtitleStyle = subtitleStyle
             self.position = position
             self.spacing = spacing
+            self.accent = accent
         }
     }
 
@@ -38,6 +42,8 @@ public enum InsetRenderer {
         public var textScale: ClosedRange<Double>
         /// With placed devices, the most the text may tilt, in degrees, to follow them.
         public var maxTextRotation: Double
+        /// With placed devices, whether the text moves towards them or stays at its edge.
+        public var textAnchor: TextAnchor
 
         public init(
             padding: Double,
@@ -46,7 +52,8 @@ public enum InsetRenderer {
             bleed: Bool = false,
             shadow: ShadowSpec? = nil,
             textScale: ClosedRange<Double> = 0.75...1.5,
-            maxTextRotation: Double = 4
+            maxTextRotation: Double = 4,
+            textAnchor: TextAnchor = .devices
         ) {
             self.padding = padding
             self.gap = gap
@@ -55,6 +62,7 @@ public enum InsetRenderer {
             self.shadow = shadow
             self.textScale = textScale
             self.maxTextRotation = maxTextRotation
+            self.textAnchor = textAnchor
         }
     }
 
@@ -101,6 +109,7 @@ public enum InsetRenderer {
         callouts: [Callout] = [],
         canvas: PixelSize,
         background: GradientSpec,
+        backdrop: Backdrop = Backdrop(),
         pages: [Text],
         style: Style
     ) throws -> [CGImage] {
@@ -157,6 +166,9 @@ public enum InsetRenderer {
         let full = PixelSize(canvas.width * pages.count, canvas.height)
         let ctx = CGContext.makeCanvas(size: full)
         background.fill(ctx, rectTL: CGRect(origin: .zero, size: full.cgSize))
+        if !backdrop.isEmpty {
+            backdrop.draw(in: ctx, page: canvas)
+        }
 
         for (layer, rect) in zip(layers, placed) {
             ctx.saveGState()
@@ -185,7 +197,7 @@ public enum InsetRenderer {
                 borderColor: callout.spec.borderColor
             )
             ctx.saveGState()
-            style.shadow?.apply(to: ctx, pageWidth: pageWidth)
+            callout.spec.shadow.resolve(inheriting: style.shadow)?.apply(to: ctx, pageWidth: pageWidth)
             ctx.draw(card, placed: layout.card)
             ctx.restoreGState()
         }
@@ -195,7 +207,7 @@ public enum InsetRenderer {
             if rotations[index] != 0 {
                 ctx.rotate(degrees: rotations[index], aboutTopLeft: block.center)
             }
-            TextRenderer.draw(text.title, style: text.titleStyle, in: block.titleRect, ctx: ctx)
+            TextRenderer.draw(text.title, style: text.titleStyle, accent: text.accent, in: block.titleRect, ctx: ctx)
             TextRenderer.draw(text.subtitle, style: text.subtitleStyle, in: block.subtitleRect, ctx: ctx)
             ctx.restoreGState()
         }
@@ -215,9 +227,9 @@ public enum InsetRenderer {
     }
 
     /// Placed devices don't make room for the text, so the text fits itself to them. It tilts a little to follow the
-    /// device or card nearest to it, scales within `textScale` (never onto more lines) to fill the room they leave, and
-    /// moves towards them until it is `gap` away. Panorama pages share one scale and move the same distance, so their
-    /// text lines up across the joins. `nil` leaves the text as it is: when there is none, when nothing is in its way,
+    /// device or card nearest to it, scales within `textScale` (never onto more lines) to fill the room they leave, and,
+    /// unless `textAnchor` keeps it at its edge, moves towards them until it is `gap` away. Panorama pages share one
+    /// scale and move the same distance, so their text lines up across the joins. `nil` leaves the text as it is: when there is none, when nothing is in its way,
     /// or when something is within `gap` of it even at the smallest scale.
     static func fitText(_ pages: [Text], around content: [PlacedRect], canvas: PixelSize, style: Style) -> [FittedText]? {
         let pageWidth = Double(canvas.width)
@@ -278,7 +290,7 @@ public enum InsetRenderer {
 
         let layouts = pages.indices.map { layout($0, scale: low)! }
         guard layouts.contains(where: \.blocked) else { return nil }
-        let travel = layouts.map(\.travel).min()!.rounded(.down)
+        let travel = style.textAnchor == .edge ? 0 : layouts.map(\.travel).min()!.rounded(.down)
         return layouts.enumerated().map { index, layout in
             // Turned, the block reaches past its own edges; `padding` is measured to its bounding box.
             let overhang = (layout.footprint.bounds.height - layout.footprint.rect.height) / 2

@@ -19,6 +19,8 @@ public struct RenderJob: Sendable, Hashable {
     public struct InsetSettings: Sendable, Hashable {
         public var title: String
         public var subtitle: String
+        /// Part of `title` drawn in `accentColor`. Empty for none.
+        public var accent: String
         public var titleStyle: TextStyle
         public var subtitleStyle: TextStyle
         public var position: TextPosition
@@ -33,6 +35,12 @@ public struct RenderJob: Sendable, Hashable {
         public var textScale: ClosedRange<Double>
         /// With `devices`, the most the text may tilt, in degrees.
         public var maxTextRotation: Double
+        /// With `devices`, whether the text moves towards them or stays at its edge.
+        public var textAnchor: TextAnchor
+        public var accentColor: RGBAColor
+        /// Drawn over the background gradient, under the devices.
+        public var glows: [GlowSpec]
+        public var backgroundImages: [BackgroundImageSpec]
         /// Explicitly placed devices, drawn in order. Empty = the job's `input` laid out automatically.
         public var devices: [PlacedDevice]
         public var callouts: [CalloutSpec]
@@ -56,10 +64,20 @@ public struct RenderJob: Sendable, Hashable {
             maxTextRotation: Double = 4,
             devices: [PlacedDevice] = [],
             callouts: [CalloutSpec] = [],
-            pages: [Page] = []
+            pages: [Page] = [],
+            accent: String = "",
+            accentColor: RGBAColor = TextConfig.defaultAccentColor,
+            textAnchor: TextAnchor = .devices,
+            glows: [GlowSpec] = [],
+            backgroundImages: [BackgroundImageSpec] = []
         ) {
             self.title = title
             self.subtitle = subtitle
+            self.accent = accent
+            self.accentColor = accentColor
+            self.textAnchor = textAnchor
+            self.glows = glows
+            self.backgroundImages = backgroundImages
             self.titleStyle = titleStyle
             self.subtitleStyle = subtitleStyle
             self.position = position
@@ -76,7 +94,7 @@ public struct RenderJob: Sendable, Hashable {
             self.pages = pages
         }
 
-        var resolvedPages: [Page] { pages.isEmpty ? [Page(title: title, subtitle: subtitle)] : pages }
+        var resolvedPages: [Page] { pages.isEmpty ? [Page(title: title, subtitle: subtitle, accent: accent)] : pages }
     }
 
     /// One screenshot in a device frame at an explicit position.
@@ -99,10 +117,13 @@ public struct RenderJob: Sendable, Hashable {
     public struct Page: Sendable, Hashable {
         public var title: String
         public var subtitle: String
+        /// Part of `title` drawn in the accent colour. Empty for none.
+        public var accent: String
 
-        public init(title: String = "", subtitle: String = "") {
+        public init(title: String = "", subtitle: String = "", accent: String = "") {
             self.title = title
             self.subtitle = subtitle
+            self.accent = accent
         }
     }
 

@@ -1,5 +1,22 @@
 import CoreGraphics
 
+/// The shadow under a callout card.
+public enum CalloutShadow: Sendable, Hashable {
+    /// The one the devices cast, if any.
+    case inherit
+    case none
+    /// Its own; with no offset and a colour, a glow.
+    case custom(ShadowSpec)
+
+    func resolve(inheriting inherited: ShadowSpec?) -> ShadowSpec? {
+        switch self {
+        case .inherit: inherited
+        case .none: nil
+        case .custom(let shadow): shadow
+        }
+    }
+}
+
 /// An enlarged copy of part of a device's screen, drawn as a card.
 public struct CalloutSpec: Sendable, Hashable {
     /// Index of the device whose screenshot is magnified.
@@ -20,6 +37,7 @@ public struct CalloutSpec: Sendable, Hashable {
     public var borderColor: RGBAColor
     /// Outline the magnified region on the device.
     public var highlight: Bool
+    public var shadow: CalloutShadow
 
     public init(
         device: Int = 0,
@@ -31,7 +49,8 @@ public struct CalloutSpec: Sendable, Hashable {
         cornerRadius: Double? = nil,
         borderWidth: Double? = nil,
         borderColor: RGBAColor = .white,
-        highlight: Bool = true
+        highlight: Bool = true,
+        shadow: CalloutShadow = .inherit
     ) {
         self.device = device
         self.region = region
@@ -43,6 +62,7 @@ public struct CalloutSpec: Sendable, Hashable {
         self.borderWidth = borderWidth
         self.borderColor = borderColor
         self.highlight = highlight
+        self.shadow = shadow
     }
 
     public func resolvedCornerRadius(pageWidth: Double) -> Double { cornerRadius ?? (pageWidth * 0.03).rounded() }

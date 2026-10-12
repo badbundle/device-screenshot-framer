@@ -37,7 +37,8 @@
 - Portrait and landscape (choose which side the notch / Dynamic Island ends up on).
 - Output at any size up to the screenshot's native size, aspect-fit and centred.
 - **Inset mode**: title + subtitle above or below the device on a linear gradient, rendered with CoreText (system SF font or any installed font).
-- **Layouts** (inset mode): let the device bleed off the edge, place and rotate one or more devices anywhere (hero crops, overlapping pairs), enlarge part of a screen into a zoom callout, add drop shadows, and cut one wide canvas into a panorama of several images. The text follows placed devices: it moves down to them, grows or shrinks to fill the room, and tilts slightly with them.
+- **Layouts** (inset mode): let the device bleed off the edge, place and rotate one or more devices anywhere (hero crops, overlapping pairs), enlarge part of a screen into a zoom callout, add drop shadows, and cut one wide canvas into a panorama of several images. The text follows placed devices: it moves down to them (or stays at the top), grows or shrinks to fill the room, and tilts slightly with them.
+- **Style** (inset mode): soft glows and pictures (a logo, a shape) over the background gradient, one accented word per title, and a shadow or coloured glow of its own for each callout card.
 - Batch rendering from a JSON config.
 - No Ruby, ImageMagick or Node — just CoreGraphics, CoreText and ImageIO. Single binary, zero runtime dependencies.
 
@@ -278,8 +279,36 @@ A solid colour or a linear gradient.
 | `colors` | array of hex strings | **required** | One colour = solid fill. Two or more = gradient, first colour at the start of the gradient line. |
 | `angle` | number | `180` | Direction in degrees, CSS convention: `0` bottom→top, `90` left→right, `180` top→bottom, `270` right→left. The gradient line is sized so the first and last colours land exactly on the canvas corners, like CSS `linear-gradient`. |
 | `locations` | array of numbers 0–1 | evenly spaced | Optional colour stops, one per colour. |
+| `glows` | array | none | Inset mode: soft light over the gradient. See [`background.glows`](#backgroundglows). |
+| `images` | array | none | Inset mode: pictures over the gradient and its glows, under the devices. See [`background.images`](#backgroundimages). |
 
 Colours accept `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA` (the `#` is optional).
+
+#### `background.glows`
+
+Each glow is `color` at its centre, fading out to nothing at `radius`: level at both ends, so it has no bright point in the middle and no visible rim. Glows are drawn in order, over the gradient. Positions are in [page units](#layouts), like devices, so in a panorama `x` keeps counting across pages.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `x` | number | `0.5` | Horizontal centre, in page widths. |
+| `y` | number | `0.5` | Vertical centre, in page heights. |
+| `radius` | number | `0.5` | In page widths. Must be greater than 0. |
+| `color` | hex string | **required** | Colour at the centre. Its alpha sets the glow's strength. |
+
+#### `background.images`
+
+A PNG or JPEG drawn over the gradient and its glows, under the devices: a logo, a shape, a texture. Placed like a device, in [page units](#layouts).
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `path` | string | **required** | Image file, relative to the config file or absolute. |
+| `x` | number | `0.5` | Horizontal centre, in page widths. |
+| `y` | number | `0.5` | Vertical centre, in page heights. |
+| `width` | number | `0.5` | In page widths. Height follows the image's aspect. |
+| `rotation` | number | `0` | Degrees clockwise about its centre. |
+| `opacity` | number 0–1 | `1` | How much of the image shows. |
+
+`glows` and `images` need `"mode": "inset"`; in simple mode they are a config error. An entry's own `background` replaces the top-level one, glows and images included.
 
 ### `shadow`
 
@@ -301,6 +330,8 @@ Colours accept `#RGB`, `#RGBA`, `#RRGGBB` and `#RRGGBBAA` (the `#` is optional).
 | `minScale` | number | `0.75` | With `devices`: the smallest the text may shrink to, as a multiple of its size, to keep `gap` from a device that crowds it. At most `1`. |
 | `maxScale` | number | `1.5` | With `devices`: the largest the text may grow to, as a multiple of its size, to fill the room above (or below) them. At least `1`; `1` keeps the sizes as given. |
 | `maxRotation` | number | `4` | With `devices`: the most, in degrees, the text may tilt to follow them. `0` keeps it level. |
+| `anchor` | `"devices"` \| `"edge"` | `"devices"` | With `devices`: `devices` moves the fitted text towards them until it is `gap` away; `edge` keeps it `padding` from its edge of the canvas, so the room goes between the text and the devices instead. |
+| `accentColor` | hex string | `"#0A84FF"` | Colour of each title's [`accent`](#screenshots). |
 
 Font object:
 
@@ -311,7 +342,7 @@ Font object:
 | `weight` | string \| null | font's own | `ultraLight`, `thin`, `light`, `regular`, `medium`, `semibold`, `bold`, `heavy`, `black`. Applied as a CoreText weight trait, so it works for the system font and for families like Avenir Next. Omit to use the exact face named in `font`. |
 | `color` | hex string | `"#FFFFFF"` | Text colour, alpha allowed. |
 
-Text is word-wrapped to the canvas width minus padding and centred. Newlines in `title` / `subtitle` start a new line. If the text block leaves no room for the device the entry fails with `title/subtitle block leaves no room for the device`. With `devices` the text fits itself to them instead; see [Text with placed devices](#text-with-placed-devices).
+Text is word-wrapped to the canvas width minus padding and centred. An entry's (or page's) `accent` names part of its title, such as one word, to draw in `text.accentColor`; only the first occurrence is coloured. Newlines in `title` / `subtitle` start a new line. If the text block leaves no room for the device the entry fails with `title/subtitle block leaves no room for the device`. With `devices` the text fits itself to them instead; see [Text with placed devices](#text-with-placed-devices).
 
 ### `screenshots[]`
 
@@ -320,6 +351,7 @@ Text is word-wrapped to the canvas width minus padding and centred. Newlines in 
 | `path` | string | **required** unless every entry in `devices` has one | Input image, relative to the config file or absolute. `~` is expanded. With `devices`, the default `path` for devices that don't set one. |
 | `title` | string | none | Inset mode title. |
 | `subtitle` | string | none | Inset mode subtitle. |
+| `accent` | string | none | Inset mode: part of `title` drawn in `text.accentColor`, e.g. `"secret."` in `"Every code.\nEvery secret."`. It must appear in the title. |
 | `device` | string | top-level `device` | Force a device for this entry. |
 | `frameColor` | string | top-level `frameColor` | Frame colour for this entry. |
 | `output` | string | input basename | Output file name without extension. |
@@ -340,7 +372,7 @@ Inset mode lays the device out automatically: fitted into the space the text lea
 
 **Page units.** Positions and sizes in `devices` and `callouts` are fractions of the page (the output canvas): `x` and `width` of its width, `y` of its height. `x` / `y` are the centre of the device or card. `0.5, 0.5` is the middle of the page; values below 0 or above 1 put things partly off the canvas, which is how hero crops work. In a panorama `x` keeps counting across pages, so `x: 1.5` is the middle of the second page.
 
-**Drawing order**: background, devices (in array order, so later devices sit on top), callout outlines, callout cards, then text. Text is drawn last so a device that reaches into it stays behind it.
+**Drawing order**: background gradient, its glows, its images, devices (in array order, so later devices sit on top), callout outlines, callout cards, then text. Text is drawn last so a device that reaches into it stays behind it.
 
 **Resolution.** A device drawn wider than its frame image is upscaled (a `width: 1.5` hero on a native-size iPhone 17 Pro canvas is about 1.35×), so it looks slightly softer than the rest of the image.
 
@@ -383,13 +415,40 @@ Recipes, each an entry in `screenshots` with `"mode": "inset"` at the top level:
 
 Add `"shadow": true` at the top level to separate overlapping devices and lift callout cards off the background.
 
+Style, on top of any layout:
+
+```jsonc
+{
+  "mode": "inset",
+  "background": {
+    "colors": ["#020409", "#0A1A42"],
+    // Light behind the device, and a faint logo behind the title.
+    "glows": [{ "x": 0.6, "y": 0.7, "radius": 0.9, "color": "#0A84FF8C" }],
+    "images": [{ "path": "art/logo.png", "x": 0.5, "y": 0.12, "width": 1.2, "rotation": -6, "opacity": 0.06 }]
+  },
+  // Big type that stays at the top, with one word in blue.
+  "text": { "anchor": "edge", "maxScale": 1, "accentColor": "#4DA3FF", "title": { "size": 150, "weight": "bold" } },
+  "screenshots": [{
+    "title": "Every code.\nEvery secret.",
+    "accent": "secret.",
+    "devices": [{ "path": "raw/home.png", "x": 0.6, "y": 0.78, "width": 1.06, "rotation": -8 }],
+    // A card lifted off the screen on a blue glow instead of the drop shadow.
+    "callouts": [{
+      "region": { "x": 36, "y": 336, "width": 608, "height": 608 },
+      "x": 0.34, "y": 0.5, "scale": 1.4, "borderWidth": 0, "highlight": false,
+      "shadow": { "color": "#0A84FFB3", "radius": 110, "offsetY": 0 }
+    }]
+  }]
+}
+```
+
 #### Text with placed devices
 
 Placed devices don't make room for the text, so the text fits itself to them:
 
 - **Tilt.** It turns by half the tilt of the device or callout card nearest to it straight below (above, for `"position": "bottom"`) its centre, capped at `text.maxRotation` (4°). A device at `-16°` gets `-4°` text; an upright one, or none, keeps it level.
 - **Size.** It scales between `text.minScale` and `text.maxScale` (0.75–1.5×) to fill the room between `padding` and the devices, but never onto more lines than it has at its given size.
-- **Position.** It moves towards the devices until it is `gap` from the nearest one, measured around the turned text, so the space goes above it rather than between it and the devices.
+- **Position.** It moves towards the devices until it is `gap` from the nearest one, measured around the turned text, so the space goes above it rather than between it and the devices. With `"anchor": "edge"` it stays at its edge instead, and the space goes between it and the devices.
 
 Panorama pages share one scale and move the same distance, so their text lines up across the joins; each page tilts with its own device. The text is left at its edge, level and at its given size, if there is nothing in its way or something is within `gap` of it even at `minScale`. The automatic layout (no `devices`) always uses the given sizes; there the device already sits `gap` from the text.
 
@@ -424,6 +483,7 @@ A callout copies a rectangle of a device's screenshot into a card, enlarged, wit
 | `borderWidth` | number | 0.8 % of canvas width | Card border in pixels. `0` for none. |
 | `borderColor` | hex string | `"#FFFFFF"` | Card border and region outline colour. |
 | `highlight` | boolean | `true` | Outline the region on the device. |
+| `shadow` | `true` \| `false` \| object | top-level `shadow` | The card's own shadow, replacing the one devices cast: `false` for none, `true` for the defaults, or a [`shadow`](#shadow) object. With `offsetY: 0` and a colour, it is a glow around the card. |
 
 ### `screenshots[].pages`
 
@@ -433,8 +493,9 @@ Two or more pages turn an entry into a panorama: one canvas `pages.length` pages
 |---|---|---|---|
 | `title` | string | none | Title for this page. |
 | `subtitle` | string | none | Subtitle for this page. |
+| `accent` | string | none | Part of this page's `title` drawn in `text.accentColor`. |
 
-A panorama needs `devices` (the automatic layout only handles one device on one page). Setting the entry's `title` or `subtitle` as well is a config error. `--only` matches the entry's `output` name, not the numbered files.
+A panorama needs `devices` (the automatic layout only handles one device on one page). Setting the entry's `title`, `subtitle` or `accent` as well is a config error. `--only` matches the entry's `output` name, not the numbered files.
 
 ---
 
@@ -445,7 +506,7 @@ A panorama needs `devices` (the automatic layout only handles one device on one 
 3. **Composite at the frame's native pixel size.** The screenshot is aspect-filled into the screen cutout and clipped to the device's real display corner radius; the frame is drawn on top so the notch / Dynamic Island covers it. Landscape screenshots rotate the frame (90° counter-clockwise for `left`, clockwise for `right`).
 4. **Size the canvas** (`width` / `height` rules above, using the first device) and **aspect-fit** the framed image into it, centred.
 5. **Simple mode**: fill the background if one is set, draw the framed image.
-   **Inset mode**: fill the background and measure the title and subtitle. Place the device: by default fitted into what the text leaves (full width minus `padding`, pinned to the edge opposite the text with `gap` between them); with `bleed`, sized to that width and allowed to run off the far edge; with `devices`, wherever each one says, after which the text tilts, scales and moves to sit `gap` from them. Draw the devices with their shadow, callout outlines and cards, then the text at `position`. A panorama does all of this on one canvas `pages` wide and then cuts it into pages.
+   **Inset mode**: fill the background, draw its glows and images, and measure the title and subtitle. Place the device: by default fitted into what the text leaves (full width minus `padding`, pinned to the edge opposite the text with `gap` between them); with `bleed`, sized to that width and allowed to run off the far edge; with `devices`, wherever each one says, after which the text tilts, scales and moves to sit `gap` from them. Draw the devices with their shadow, callout outlines and cards, then the text at `position`. A panorama does all of this on one canvas `pages` wide and then cuts it into pages.
 6. **Write** PNG (RGBA) or JPEG (flattened), one file per page.
 
 ---
@@ -553,7 +614,7 @@ let job = RenderJob(
 let (outcomes, failures) = await renderer.run([job])
 ```
 
-For layouts, `RenderJob.InsetSettings` also takes `bleed`, `shadow: ShadowSpec?`, `textScale: ClosedRange<Double>`, `maxTextRotation`, `devices: [RenderJob.PlacedDevice]` (each with its own `input` and a `DevicePlacement`), `callouts: [CalloutSpec]` and `pages: [RenderJob.Page]`, mirroring the config keys. `RenderJob.outputURLs` lists the files a job writes.
+For layouts, `RenderJob.InsetSettings` also takes `bleed`, `shadow: ShadowSpec?`, `textScale: ClosedRange<Double>`, `maxTextRotation`, `devices: [RenderJob.PlacedDevice]` (each with its own `input` and a `DevicePlacement`), `callouts: [CalloutSpec]` and `pages: [RenderJob.Page]`, and for style `accent`, `accentColor`, `textAnchor: TextAnchor`, `glows: [GlowSpec]` and `backgroundImages: [BackgroundImageSpec]`, mirroring the config keys. `RenderJob.outputURLs` lists the files a job writes.
 
 `Renderer.run` never throws; it returns per-job outcomes and errors. `Outcome.outputs` has one URL per page and `Outcome.screens` one entry per device. For finer control, `Renderer.prepare(_:manifest:)` (async: detect device, fetch frame) and `Renderer.render(_:)` (synchronous: all CoreGraphics work) can be called separately. Loading a config file: `ConfigLoader.load(url)` → `ConfigLoader.jobs(from:baseDirectory:)`.
 
@@ -565,11 +626,12 @@ Lower-level pieces, all public:
 | `FrameStore` / `FrameManifest` / `FrameResolver` | Download, cache and resolve frames and their screen offsets. `FrameStore.fetch` is injectable for tests. |
 | `FrameGeometry` / `OrientedGeometry` | Cutout rect, aspect-fill/fit maths, landscape transforms. |
 | `FrameCompositor` | Screenshot + frame → framed `CGImage` at native size. |
-| `SimpleRenderer` / `InsetRenderer` / `InsetLayout` | The two output modes; `InsetLayout.compute` is pure layout maths. `InsetRenderer.render(layers:callouts:canvas:background:pages:style:)` draws several devices and pages. |
+| `SimpleRenderer` / `InsetRenderer` / `InsetLayout` | The two output modes; `InsetLayout.compute` is pure layout maths. `InsetRenderer.render(layers:callouts:canvas:background:backdrop:pages:style:)` draws several devices and pages. |
 | `DevicePlacement` / `PlacedRect` | Device positions in page units, and the resolved (rotated) rect on the canvas. |
-| `CalloutSpec` / `CalloutLayout` / `CalloutRenderer` | Zoom callouts: settings, pure layout maths, drawing. |
+| `CalloutSpec` / `CalloutShadow` / `CalloutLayout` / `CalloutRenderer` | Zoom callouts: settings, each card's shadow, pure layout maths, drawing. |
+| `GlowSpec` / `BackgroundImageSpec` / `InsetRenderer.Backdrop` | Glows and pictures over the background gradient; `InsetRenderer.render(…backdrop:…)` draws them. |
 | `ShadowSpec` | Drop shadow under devices and callout cards. |
-| `TextRenderer` / `TextStyle` / `FontSpec` / `FontWeight` | CoreText measuring and drawing. |
+| `TextRenderer` / `TextStyle` / `TextAccent` / `TextAnchor` / `FontSpec` / `FontWeight` | CoreText measuring and drawing, the accented part of a title, where fitted text sits. |
 | `GradientSpec` / `RGBAColor` | Backgrounds and colours. |
 | `ImageLoader` / `ImageWriter` / `OutputFormat` | ImageIO in and out. |
 | `FramerConfig` and friends | `Codable` config schema. |
@@ -613,7 +675,7 @@ The committed PNGs are downscaled to 640 px for the README; the tool's output is
 
 ```sh
 swift build
-swift test          # 101 tests; synthetic frames, no network
+swift test          # 139 tests; synthetic frames, no network
 ```
 
 - `Sources/FramerCore` — the library (device table, frame store, geometry, rendering, config, pipeline).

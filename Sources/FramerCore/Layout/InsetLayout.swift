@@ -6,6 +6,12 @@ public enum TextPosition: String, Sendable, Codable, CaseIterable {
     case bottom
 }
 
+/// With placed devices, where the fitted text sits: moved towards them until it is `gap` away, or kept at its edge.
+public enum TextAnchor: String, Sendable, Codable, CaseIterable {
+    case devices
+    case edge
+}
+
 /// Pure layout for inset mode. All rects in top-left pixel coordinates.
 public struct InsetLayout: Sendable, Equatable {
     public var titleRect: CGRect

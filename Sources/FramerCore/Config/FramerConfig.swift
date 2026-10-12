@@ -109,11 +109,23 @@ public struct BackgroundConfig: Sendable, Codable, Equatable {
     public var colors: [RGBAColor]
     public var angle: Double
     public var locations: [Double]?
+    /// Inset mode: soft light over the gradient.
+    public var glows: [GlowConfig]
+    /// Inset mode: pictures over the gradient and its glows, under the devices.
+    public var images: [BackgroundImageConfig]
 
-    public init(colors: [RGBAColor], angle: Double = 180, locations: [Double]? = nil) {
+    public init(
+        colors: [RGBAColor],
+        angle: Double = 180,
+        locations: [Double]? = nil,
+        glows: [GlowConfig] = [],
+        images: [BackgroundImageConfig] = []
+    ) {
         self.colors = colors
         self.angle = angle
         self.locations = locations
+        self.glows = glows
+        self.images = images
     }
 
     public init(from decoder: Decoder) throws {
@@ -121,11 +133,72 @@ public struct BackgroundConfig: Sendable, Codable, Equatable {
         colors = try c.decode([RGBAColor].self, forKey: .colors)
         angle = try c.decodeIfPresent(Double.self, forKey: .angle) ?? 180
         locations = try c.decodeIfPresent([Double].self, forKey: .locations)
+        glows = try c.decodeIfPresent([GlowConfig].self, forKey: .glows) ?? []
+        images = try c.decodeIfPresent([BackgroundImageConfig].self, forKey: .images) ?? []
     }
 
     public var gradient: GradientSpec {
         GradientSpec(colors: colors, angleDegrees: angle, locations: locations)
     }
+}
+
+/// A glow, positioned in page units like a device. See `GlowSpec`.
+public struct GlowConfig: Sendable, Codable, Equatable {
+    public var x: Double
+    public var y: Double
+    /// In page widths.
+    public var radius: Double
+    public var color: RGBAColor
+
+    public init(x: Double = 0.5, y: Double = 0.5, radius: Double = 0.5, color: RGBAColor) {
+        self.x = x
+        self.y = y
+        self.radius = radius
+        self.color = color
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+        radius = try c.decodeIfPresent(Double.self, forKey: .radius) ?? 0.5
+        color = try c.decode(RGBAColor.self, forKey: .color)
+    }
+
+    public var spec: GlowSpec { GlowSpec(x: x, y: y, radius: radius, color: color) }
+}
+
+/// A picture in the background, positioned in page units like a device.
+public struct BackgroundImageConfig: Sendable, Codable, Equatable {
+    public var path: String
+    public var x: Double
+    public var y: Double
+    /// In page widths. Height follows the image's aspect.
+    public var width: Double
+    /// Degrees clockwise.
+    public var rotation: Double
+    public var opacity: Double
+
+    public init(path: String, x: Double = 0.5, y: Double = 0.5, width: Double = 0.5, rotation: Double = 0, opacity: Double = 1) {
+        self.path = path
+        self.x = x
+        self.y = y
+        self.width = width
+        self.rotation = rotation
+        self.opacity = opacity
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        path = try c.decode(String.self, forKey: .path)
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+        width = try c.decodeIfPresent(Double.self, forKey: .width) ?? 0.5
+        rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0
+        opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1
+    }
+
+    public var placement: DevicePlacement { DevicePlacement(x: x, y: y, width: width, rotation: rotation) }
 }
 
 public struct ShadowConfig: Sendable, Codable, Equatable {
@@ -168,6 +241,12 @@ public struct TextConfig: Sendable, Codable, Equatable {
     public var maxScale: Double
     /// With placed devices, the most the text may tilt, in degrees, to follow them. 0 keeps it level.
     public var maxRotation: Double
+    /// With placed devices, whether the text moves towards them or stays at its edge.
+    public var anchor: TextAnchor
+    /// Colour of each title's `accent`.
+    public var accentColor: RGBAColor
+
+    public static let defaultAccentColor = RGBAColor(red: 10 / 255, green: 132 / 255, blue: 1)
 
     public init(
         position: TextPosition = .top,
@@ -176,7 +255,9 @@ public struct TextConfig: Sendable, Codable, Equatable {
         spacing: Double? = nil,
         minScale: Double = 0.75,
         maxScale: Double = 1.5,
-        maxRotation: Double = 4
+        maxRotation: Double = 4,
+        anchor: TextAnchor = .devices,
+        accentColor: RGBAColor = TextConfig.defaultAccentColor
     ) {
         self.position = position
         self.title = title
@@ -185,6 +266,8 @@ public struct TextConfig: Sendable, Codable, Equatable {
         self.minScale = minScale
         self.maxScale = maxScale
         self.maxRotation = maxRotation
+        self.anchor = anchor
+        self.accentColor = accentColor
     }
 
     public init(from decoder: Decoder) throws {
@@ -197,6 +280,8 @@ public struct TextConfig: Sendable, Codable, Equatable {
         minScale = try c.decodeIfPresent(Double.self, forKey: .minScale) ?? defaults.minScale
         maxScale = try c.decodeIfPresent(Double.self, forKey: .maxScale) ?? defaults.maxScale
         maxRotation = try c.decodeIfPresent(Double.self, forKey: .maxRotation) ?? defaults.maxRotation
+        anchor = try c.decodeIfPresent(TextAnchor.self, forKey: .anchor) ?? defaults.anchor
+        accentColor = try c.decodeIfPresent(RGBAColor.self, forKey: .accentColor) ?? defaults.accentColor
     }
 
     public var resolvedSpacing: Double { spacing ?? (subtitle.size * 0.4).rounded() }
@@ -233,6 +318,8 @@ public struct ScreenshotEntry: Sendable, Codable, Equatable {
     public var path: String?
     public var title: String?
     public var subtitle: String?
+    /// Part of `title` drawn in `text.accentColor`.
+    public var accent: String?
     public var device: String?
     public var frameColor: String?
     /// Output file name without extension. Default: input basename.
@@ -251,6 +338,7 @@ public struct ScreenshotEntry: Sendable, Codable, Equatable {
         path: String? = nil,
         title: String? = nil,
         subtitle: String? = nil,
+        accent: String? = nil,
         device: String? = nil,
         frameColor: String? = nil,
         output: String? = nil,
@@ -264,6 +352,7 @@ public struct ScreenshotEntry: Sendable, Codable, Equatable {
         self.path = path
         self.title = title
         self.subtitle = subtitle
+        self.accent = accent
         self.device = device
         self.frameColor = frameColor
         self.output = output
@@ -338,6 +427,7 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
     public var borderWidth: Double?
     public var borderColor: RGBAColor
     public var highlight: Bool
+    public var shadow: CalloutShadowConfig
 
     public init(
         device: Int = 0,
@@ -349,7 +439,8 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
         cornerRadius: Double? = nil,
         borderWidth: Double? = nil,
         borderColor: RGBAColor = .white,
-        highlight: Bool = true
+        highlight: Bool = true,
+        shadow: CalloutShadowConfig = .inherit
     ) {
         self.device = device
         self.region = region
@@ -361,6 +452,7 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
         self.borderWidth = borderWidth
         self.borderColor = borderColor
         self.highlight = highlight
+        self.shadow = shadow
     }
 
     public init(from decoder: Decoder) throws {
@@ -375,6 +467,7 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
         borderWidth = try c.decodeIfPresent(Double.self, forKey: .borderWidth)
         borderColor = try c.decodeIfPresent(RGBAColor.self, forKey: .borderColor) ?? .white
         highlight = try c.decodeIfPresent(Bool.self, forKey: .highlight) ?? true
+        shadow = try c.decodeIfPresent(CalloutShadowConfig.self, forKey: .shadow) ?? .inherit
     }
 
     public var spec: CalloutSpec {
@@ -388,8 +481,42 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
             cornerRadius: cornerRadius,
             borderWidth: borderWidth,
             borderColor: borderColor,
-            highlight: highlight
+            highlight: highlight,
+            shadow: shadow.spec
         )
+    }
+}
+
+/// A callout's `shadow`: left out, the devices' shadow; `false`, none; `true` or an object, its own.
+public enum CalloutShadowConfig: Sendable, Codable, Equatable {
+    case inherit
+    case none
+    case custom(ShadowConfig)
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let enabled = try? c.decode(Bool.self) {
+            self = enabled ? .custom(ShadowConfig()) : .none
+        } else {
+            self = .custom(try c.decode(ShadowConfig.self))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .inherit: try c.encodeNil()
+        case .none: try c.encode(false)
+        case .custom(let shadow): try c.encode(shadow)
+        }
+    }
+
+    public var spec: CalloutShadow {
+        switch self {
+        case .inherit: .inherit
+        case .none: .none
+        case .custom(let shadow): .custom(shadow.spec)
+        }
     }
 }
 
@@ -413,9 +540,12 @@ public struct RegionConfig: Sendable, Codable, Equatable {
 public struct PageEntry: Sendable, Codable, Equatable {
     public var title: String?
     public var subtitle: String?
+    /// Part of `title` drawn in `text.accentColor`.
+    public var accent: String?
 
-    public init(title: String? = nil, subtitle: String? = nil) {
+    public init(title: String? = nil, subtitle: String? = nil, accent: String? = nil) {
         self.title = title
         self.subtitle = subtitle
+        self.accent = accent
     }
 }
