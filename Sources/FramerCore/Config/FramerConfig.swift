@@ -421,6 +421,9 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
     public var region: RegionConfig
     public var x: Double?
     public var y: Double?
+    /// In the screenshot's pixels, along the device's axes.
+    public var offsetX: Double
+    public var offsetY: Double
     public var scale: Double
     public var rotation: Double?
     public var cornerRadius: Double?
@@ -434,6 +437,8 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
         region: RegionConfig,
         x: Double? = nil,
         y: Double? = nil,
+        offsetX: Double = 0,
+        offsetY: Double = 0,
         scale: Double = 1.5,
         rotation: Double? = nil,
         cornerRadius: Double? = nil,
@@ -446,6 +451,8 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
         self.region = region
         self.x = x
         self.y = y
+        self.offsetX = offsetX
+        self.offsetY = offsetY
         self.scale = scale
         self.rotation = rotation
         self.cornerRadius = cornerRadius
@@ -461,6 +468,8 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
         region = try c.decode(RegionConfig.self, forKey: .region)
         x = try c.decodeIfPresent(Double.self, forKey: .x)
         y = try c.decodeIfPresent(Double.self, forKey: .y)
+        offsetX = try c.decodeIfPresent(Double.self, forKey: .offsetX) ?? 0
+        offsetY = try c.decodeIfPresent(Double.self, forKey: .offsetY) ?? 0
         scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.5
         rotation = try c.decodeIfPresent(Double.self, forKey: .rotation)
         cornerRadius = try c.decodeIfPresent(Double.self, forKey: .cornerRadius)
@@ -476,6 +485,8 @@ public struct CalloutEntry: Sendable, Codable, Equatable {
             region: region.rect,
             x: x,
             y: y,
+            offsetX: offsetX,
+            offsetY: offsetY,
             scale: scale,
             rotation: rotation,
             cornerRadius: cornerRadius,

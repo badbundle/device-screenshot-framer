@@ -292,3 +292,52 @@ import Testing
         ])
     }
 }
+
+@Suite struct CalloutOffsetTests {
+    let device = PlacedRect(rect: CGRect(x: 100, y: 100, width: 150, height: 300))
+    let framedSize = PixelSize(300, 600)
+    let page = PixelSize(1000, 1000)
+    let region = CGRect(x: 100, y: 200, width: 40, height: 20)
+
+    @Test func movesTheCardInTheDevicesPixels() {
+        // Device is drawn at half size, so 20 framed pixels down is 10 on the canvas.
+        let spec = CalloutSpec(region: .zero, offsetX: -8, offsetY: 20, scale: 2)
+        let result = CalloutLayout.compute(spec, region: region, offset: CGSize(width: -8, height: 20), device: device, framedSize: framedSize, page: page)
+        #expect(result.card.center == CGPoint(x: 160 - 4, y: 205 + 10))
+        #expect(result.source.center == CGPoint(x: 160, y: 205))
+    }
+
+    @Test func followsTheDevicesTilt() {
+        var rotated = device
+        rotated.rotation = 90
+        let spec = CalloutSpec(region: .zero, scale: 1)
+        let plain = CalloutLayout.compute(spec, region: region, device: rotated, framedSize: framedSize, page: page)
+        let moved = CalloutLayout.compute(spec, region: region, offset: CGSize(width: 0, height: 20), device: rotated, framedSize: framedSize, page: page)
+        // The device's "down" points left once it's turned 90° clockwise.
+        #expect(abs(moved.card.center.x - (plain.card.center.x - 10)) < 0.001)
+        #expect(abs(moved.card.center.y - plain.card.center.y) < 0.001)
+    }
+
+    @Test func movesAnExplicitPositionToo() {
+        let spec = CalloutSpec(region: .zero, x: 0.5, y: 0.25, scale: 1)
+        let result = CalloutLayout.compute(spec, region: region, offset: CGSize(width: 40, height: 0), device: device, framedSize: framedSize, page: page)
+        #expect(result.card.center == CGPoint(x: 520, y: 250))
+    }
+
+    @Test func offsetIsInScreenshotPixels() {
+        let spec = CalloutSpec(region: .zero, offsetX: 10, offsetY: -4)
+        #expect(CalloutLayout.framedOffset(spec, screenshotFill: (rect: .zero, scale: 0.5)) == CGSize(width: 5, height: -2))
+    }
+
+    @Test func configReachesTheSpec() throws {
+        let jobs = try ConfigLoader.jobs(from: ConfigLoader.decode(Data(#"""
+        { "mode": "inset", "screenshots": [{ "path": "a.png", "callouts": [
+          { "region": { "x": 0, "y": 0, "width": 1, "height": 1 }, "offsetY": 34 },
+          { "region": { "x": 0, "y": 0, "width": 1, "height": 1 } }
+        ] }] }
+        """#.utf8)), baseDirectory: URL(fileURLWithPath: "/tmp"))
+        let callouts = try #require(jobs[0].inset?.callouts)
+        #expect(callouts[0].offsetX == 0 && callouts[0].offsetY == 34)
+        #expect(callouts[1].offsetX == 0 && callouts[1].offsetY == 0)
+    }
+}

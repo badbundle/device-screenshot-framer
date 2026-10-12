@@ -186,7 +186,8 @@ public struct Renderer: Sendable {
                 return InsetRenderer.Callout(
                     spec: spec,
                     image: crop,
-                    region: CalloutLayout.framedRegion(spec.region, screenshotFill: screen.fill)
+                    region: CalloutLayout.framedRegion(spec.region, screenshotFill: screen.fill),
+                    offset: CalloutLayout.framedOffset(spec, screenshotFill: screen.fill)
                 )
             }
 

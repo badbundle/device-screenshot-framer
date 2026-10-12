@@ -84,11 +84,14 @@ public enum InsetRenderer {
         public var image: CGImage
         /// Where that part sits in the layer's framed image (see `CalloutLayout.framedRegion`).
         public var region: CGRect
+        /// The spec's offset in the layer's framed-image pixels (see `CalloutLayout.framedOffset`).
+        public var offset: CGSize
 
-        public init(spec: CalloutSpec, image: CGImage, region: CGRect) {
+        public init(spec: CalloutSpec, image: CGImage, region: CGRect, offset: CGSize = .zero) {
             self.spec = spec
             self.image = image
             self.region = region
+            self.offset = offset
         }
     }
 
@@ -150,6 +153,7 @@ public enum InsetRenderer {
             return CalloutLayout.compute(
                 callout.spec,
                 region: callout.region,
+                offset: callout.offset,
                 device: placed[callout.spec.device],
                 framedSize: layers[callout.spec.device].framed.pixelSize,
                 page: canvas

@@ -477,6 +477,8 @@ A callout copies a rectangle of a device's screenshot into a card, enlarged, wit
 | `device` | integer | `0` | Index into `devices` (0 is the automatically laid-out device when there is no `devices`). |
 | `x` | number | over the region | Card centre, in page widths. |
 | `y` | number | over the region | Card centre, in page heights. |
+| `offsetX` | number | `0` | Moves the card from `x` / `y` (or from over the region), in the screenshot's own pixels along the device's axes, so it stays with the region when the device moves, grows or tilts. Positive is right. |
+| `offsetY` | number | `0` | As `offsetX`; positive is down the screen. |
 | `scale` | number | `1.5` | Card size relative to the region's size on the device. |
 | `rotation` | number | the device's | Card rotation in degrees clockwise. |
 | `cornerRadius` | number | 3 % of canvas width | Card corner radius in pixels. |
@@ -484,6 +486,8 @@ A callout copies a rectangle of a device's screenshot into a card, enlarged, wit
 | `borderColor` | hex string | `"#FFFFFF"` | Card border and region outline colour. |
 | `highlight` | boolean | `true` | Outline the region on the device. |
 | `shadow` | `true` \| `false` \| object | top-level `shadow` | The card's own shadow, replacing the one devices cast: `false` for none, `true` for the defaults, or a [`shadow`](#shadow) object. With `offsetY: 0` and a colour, it is a glow around the card. |
+
+A card left over its region (no `x` / `y`), at the device's rotation, covers the region completely; with a small `scale` its edges stay in the gaps around it, so nothing half-hidden shows at its edges. `offsetX` / `offsetY` nudge it off-centre without losing that.
 
 ### `screenshots[].pages`
 
@@ -675,7 +679,7 @@ The committed PNGs are downscaled to 640 px for the README; the tool's output is
 
 ```sh
 swift build
-swift test          # 139 tests; synthetic frames, no network
+swift test          # 144 tests; synthetic frames, no network
 ```
 
 - `Sources/FramerCore` — the library (device table, frame store, geometry, rendering, config, pipeline).
