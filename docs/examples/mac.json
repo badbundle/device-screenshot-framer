@@ -1,0 +1,48 @@
+{
+  "outputDirectory": "out",
+  "output": { "width": 2880, "height": 1800 },
+  "mode": "inset",
+  "frame": "window",
+  "background": {
+    "colors": ["#020409", "#0A1A42"],
+    "glows": [{ "x": 0.5, "y": 0.8, "radius": 0.6, "color": "#0A84FF66" }]
+  },
+  "text": {
+    "anchor": "edge",
+    "maxScale": 1,
+    "accentColor": "#4DA3FF",
+    "title": { "size": 120, "weight": "bold", "color": "#FFFFFF" },
+    "subtitle": { "size": 56, "weight": "medium", "color": "#FFFFFFB3" }
+  },
+  "screenshots": [
+    {
+      "path": "raw/mac-window.png",
+      "output": "mac-window",
+      "title": "A window, not a device.",
+      "accent": "window,",
+      "subtitle": "Any size of Mac capture, with its own shadow."
+    },
+    {
+      "output": "mac-two-windows",
+      "title": "Two windows, one called out.",
+      "accent": "called out.",
+      "devices": [
+        { "path": "raw/mac-window.png", "x": 0.42, "y": 0.66, "width": 0.7 },
+        { "path": "raw/mac-settings-dark.png", "x": 0.8, "y": 0.62, "width": 0.26 }
+      ],
+      "callouts": [{
+        "region": { "x": 452, "y": 116, "width": 500, "height": 116 },
+        "x": 0.24, "y": 0.4, "scale": 1.8, "borderWidth": 0, "highlight": false,
+        "shadow": { "color": "#0A84FFB3", "radius": 90, "offsetY": 0 }
+      }]
+    },
+    {
+      "path": "raw/mac-desktop.png",
+      "output": "mac-macbook",
+      "frame": "device",
+      "title": "Or in a MacBook.",
+      "accent": "MacBook.",
+      "subtitle": "Full-screen captures at the Mac App Store's sizes are detected."
+    }
+  ]
+}
