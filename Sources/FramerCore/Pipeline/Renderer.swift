@@ -186,9 +186,17 @@ public struct Renderer: Sendable {
                 return InsetRenderer.Callout(
                     spec: spec,
                     image: crop,
-                    region: CalloutLayout.framedRegion(spec.region, screenshotFill: screen.fill)
+                    region: CalloutLayout.framedRegion(spec.region, screenshotFill: screen.fill),
+                    offset: CalloutLayout.framedOffset(spec, screenshotFill: screen.fill)
                 )
             }
+
+            let backdrop = InsetRenderer.Backdrop(
+                glows: inset.glows,
+                images: try inset.backgroundImages.map { spec in
+                    InsetRenderer.Backdrop.Image(image: try ImageLoader.load(spec.input), placement: spec.placement, opacity: spec.opacity)
+                }
+            )
 
             let padding = inset.padding ?? (Double(canvas.width) * 0.05).rounded()
             results = try InsetRenderer.render(
@@ -196,6 +204,7 @@ public struct Renderer: Sendable {
                 callouts: callouts,
                 canvas: canvas,
                 background: background,
+                backdrop: backdrop,
                 pages: pages.map { page in
                     InsetRenderer.Text(
                         title: page.title,
@@ -203,7 +212,8 @@ public struct Renderer: Sendable {
                         titleStyle: inset.titleStyle,
                         subtitleStyle: inset.subtitleStyle,
                         position: inset.position,
-                        spacing: inset.spacing
+                        spacing: inset.spacing,
+                        accent: page.accent.isEmpty ? nil : TextAccent(text: page.accent, color: inset.accentColor)
                     )
                 },
                 style: InsetRenderer.Style(
@@ -213,7 +223,8 @@ public struct Renderer: Sendable {
                     bleed: inset.bleed,
                     shadow: inset.shadow,
                     textScale: inset.textScale,
-                    maxTextRotation: inset.maxTextRotation
+                    maxTextRotation: inset.maxTextRotation,
+                    textAnchor: inset.textAnchor
                 )
             )
         }

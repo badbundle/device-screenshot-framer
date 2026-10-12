@@ -30,6 +30,7 @@ public enum ConfigLoader {
             throw FramerError.config("'screenshots' is empty")
         }
         try config.background?.gradient.validate()
+        try config.background.map { try validateLayers(of: $0, context: "background") }
         guard config.text.minScale > 0, config.text.minScale <= 1 else {
             throw FramerError.config("'text.minScale' must be greater than 0 and at most 1")
         }
@@ -58,9 +59,17 @@ public enum ConfigLoader {
         let callouts = entry.callouts ?? []
         let pages = entry.pages ?? []
         try entry.background?.gradient.validate()
+        try entry.background.map { try validateLayers(of: $0, context: "\(context).background") }
+        let background = entry.background ?? config.background
 
         if config.mode == .simple {
-            for (key, isUsed) in [("devices", !devices.isEmpty), ("callouts", !callouts.isEmpty), ("pages", !pages.isEmpty)] where isUsed {
+            for (key, isUsed) in [
+                ("devices", !devices.isEmpty),
+                ("callouts", !callouts.isEmpty),
+                ("pages", !pages.isEmpty),
+                ("background.glows", !(background?.glows.isEmpty ?? true)),
+                ("background.images", !(background?.images.isEmpty ?? true)),
+            ] where isUsed {
                 throw FramerError.config("\(context): '\(key)' needs \"mode\": \"inset\"")
             }
         }
@@ -71,6 +80,13 @@ public enum ConfigLoader {
             guard entry.title == nil, entry.subtitle == nil else {
                 throw FramerError.config("\(context): with 'pages', put titles and subtitles in each page instead")
             }
+            guard entry.accent == nil else {
+                throw FramerError.config("\(context): with 'pages', put each 'accent' in its page instead")
+            }
+        }
+        try validateAccent(entry.accent, in: entry.title, context: context)
+        for (pageIndex, page) in pages.enumerated() {
+            try validateAccent(page.accent, in: page.title, context: "\(context).pages[\(pageIndex)]")
         }
 
         let placed = try devices.enumerated().map { deviceIndex, device -> RenderJob.PlacedDevice in
@@ -125,7 +141,14 @@ public enum ConfigLoader {
             maxTextRotation: config.text.maxRotation,
             devices: placed,
             callouts: callouts.map(\.spec),
-            pages: pages.map { RenderJob.Page(title: $0.title ?? "", subtitle: $0.subtitle ?? "") }
+            pages: pages.map { RenderJob.Page(title: $0.title ?? "", subtitle: $0.subtitle ?? "", accent: $0.accent ?? "") },
+            accent: entry.accent ?? "",
+            accentColor: config.text.accentColor,
+            textAnchor: config.text.anchor,
+            glows: background?.glows.map(\.spec) ?? [],
+            backgroundImages: background?.images.map {
+                BackgroundImageSpec(input: resolve($0.path, against: baseDirectory), placement: $0.placement, opacity: $0.opacity)
+            } ?? []
         ) : nil
 
         return RenderJob(
@@ -139,9 +162,30 @@ public enum ConfigLoader {
             landscapeSide: entry.landscapeSide ?? config.landscapeSide,
             requestedWidth: config.output.width,
             requestedHeight: config.output.height,
-            background: (entry.background ?? config.background)?.gradient,
+            background: background?.gradient,
             inset: inset
         )
+    }
+
+    private static func validateLayers(of background: BackgroundConfig, context: String) throws {
+        for (index, glow) in background.glows.enumerated() where glow.radius <= 0 {
+            throw FramerError.config("\(context).glows[\(index)]: 'radius' must be greater than 0")
+        }
+        for (index, image) in background.images.enumerated() {
+            guard image.width > 0 else {
+                throw FramerError.config("\(context).images[\(index)]: 'width' must be greater than 0")
+            }
+            guard (0...1).contains(image.opacity) else {
+                throw FramerError.config("\(context).images[\(index)]: 'opacity' must be within 0...1")
+            }
+        }
+    }
+
+    private static func validateAccent(_ accent: String?, in title: String?, context: String) throws {
+        guard let accent else { return }
+        guard !accent.isEmpty, title?.contains(accent) == true else {
+            throw FramerError.config("\(context): 'accent' \"\(accent)\" is not part of the title")
+        }
     }
 
     static func resolve(_ path: String, against base: URL) -> URL {

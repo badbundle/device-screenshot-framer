@@ -50,6 +50,17 @@ public struct TextStyle: Sendable, Hashable {
     }
 }
 
+/// Part of a piece of text drawn in another colour: the first occurrence of `text`.
+public struct TextAccent: Sendable, Hashable {
+    public var text: String
+    public var color: RGBAColor
+
+    public init(text: String, color: RGBAColor) {
+        self.text = text
+        self.color = color
+    }
+}
+
 public enum TextRenderer {
     /// Resolves a CTFont. Unknown font names fall back to the system font with a warning
     /// (CoreText would otherwise silently substitute Helvetica).
@@ -144,10 +155,26 @@ public enum TextRenderer {
         return lines.map { CTLineGetTypographicBounds($0, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth($0) }
     }
 
+    /// `text` with `accent` recoloured. Colour leaves the metrics alone, so measuring needn't know about it.
+    static func attributedString(_ text: String, style: TextStyle, accent: TextAccent?) -> CFAttributedString {
+        let plain = attributedString(text, style: style)
+        guard let accent, !accent.text.isEmpty else { return plain }
+        let range = (text as NSString).range(of: accent.text)
+        guard range.location != NSNotFound else { return plain }
+        let accented = CFAttributedStringCreateMutableCopy(nil, 0, plain)!
+        CFAttributedStringSetAttribute(
+            accented,
+            CFRange(location: range.location, length: range.length),
+            kCTForegroundColorAttributeName,
+            accent.color.cgColor
+        )
+        return accented
+    }
+
     /// Draws `text` centred inside `rectTL` (top-left coordinates), lines flowing from the top.
-    static func draw(_ text: String, style: TextStyle, in rectTL: CGRect, ctx: CGContext) {
+    static func draw(_ text: String, style: TextStyle, accent: TextAccent? = nil, in rectTL: CGRect, ctx: CGContext) {
         guard !text.isEmpty, rectTL.width > 0, rectTL.height > 0 else { return }
-        let framesetter = CTFramesetterCreateWithAttributedString(attributedString(text, style: style))
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedString(text, style: style, accent: accent))
         let path = CGPath(rect: rectTL.flipped(in: Double(ctx.height)), transform: nil)
         let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
         ctx.saveGState()
