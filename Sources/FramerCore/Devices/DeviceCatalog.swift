@@ -1,13 +1,21 @@
-/// Every device we can frame. Screen sizes are native portrait screenshot pixels; corner radii are the
-/// real display corner radius (points × scale). Frames come from fastlane/frameit-frames; devices that
+/// Every device we can frame. Screen sizes are native screenshot pixels in the frame's orientation (portrait for
+/// iPhone and iPad, landscape for Mac); corner radii are the real display corner radius (points × scale). Frames come from fastlane/frameit-frames; devices that
 /// repo does not cover borrow the closest frame via `frameScreenSize` and are aspect-filled into it.
 public enum DeviceCatalog {
-    public static let all: [Device] = iPhones + iPads
+    public static let all: [Device] = iPhones + iPads + macs
 
-    /// Highest-priority device whose native size matches `size` in either orientation.
+    /// The sizes the Mac App Store takes, all 16:10 landscape, smallest first.
+    public static let macAppStoreSizes: [PixelSize] = [
+        PixelSize(1280, 800), PixelSize(1440, 900), PixelSize(2560, 1600), PixelSize(2880, 1800),
+    ]
+
+    /// The canvas Mac screenshots, windows and MacBook frames alike, render on by default, and at most.
+    public static var macCanvas: PixelSize { macAppStoreSizes.last! }
+
+    /// Highest-priority device whose native size matches `size`, in either orientation for devices that turn.
     public static func detect(_ size: PixelSize) -> (device: Device, orientation: Orientation)? {
-        if let d = best(matching: size) { return (d, .portrait) }
-        if let d = best(matching: size.swapped) { return (d, .landscape) }
+        if let d = best(matching: size) { return (d, d.frameOrientation) }
+        if let d = best(matching: size.swapped, where: \.canRotate) { return (d, .landscape) }
         return nil
     }
 
@@ -20,8 +28,8 @@ public enum DeviceCatalog {
             .max { $0.priority < $1.priority }
     }
 
-    private static func best(matching portrait: PixelSize) -> Device? {
-        all.filter { $0.screenSize == portrait }.max { $0.priority < $1.priority }
+    private static func best(matching size: PixelSize, where isIncluded: (Device) -> Bool = { _ in true }) -> Device? {
+        all.filter { $0.screenSize == size && isIncluded($0) }.max { $0.priority < $1.priority }
     }
 
     // MARK: - iPhone
@@ -179,5 +187,45 @@ public enum DeviceCatalog {
                framePrefix: "Apple iPad Mini (2019)", colors: ["Gold", "Silver", "Space Gray"], defaultColor: "Space Gray"),
         Device(name: "iPad Air 2", screenSize: PixelSize(1536, 2048), cornerRadius: 0, priority: 90,
                framePrefix: "Apple iPad Air (2019) 2", colors: ["Gold", "Silver", "Space Gray"], defaultColor: "Space Gray"),
+    ]
+
+    // MARK: - Mac
+
+    // Screens are square-cornered and the frames are drawn landscape, so they never turn. The Mac App Store's smaller
+    // sizes borrow a frame of the same 16:10 aspect, so nothing is cropped.
+    static let macs: [Device] = [
+        // 3072x1920
+        Device(name: "MacBook Pro 16", aliases: ["MacBook Pro (16-inch)"],
+               screenSize: PixelSize(3072, 1920), cornerRadius: 0, priority: 100,
+               framePrefix: "Apple MacBook Pro 16", colors: ["Silver", "Space Gray"], defaultColor: "Space Gray",
+               frameOrientation: .landscape),
+
+        // 2880x1800 — no upstream frame; borrows MacBook Pro 16 (same aspect, no crop).
+        Device(name: "MacBook Pro 15", aliases: ["MacBook Pro (15-inch)"],
+               screenSize: PixelSize(2880, 1800), cornerRadius: 0, priority: 100,
+               framePrefix: "Apple MacBook Pro 16", frameScreenSize: PixelSize(3072, 1920),
+               colors: ["Silver", "Space Gray"], defaultColor: "Space Gray", frameOrientation: .landscape),
+
+        // 2560x1600
+        Device(name: "MacBook Air", aliases: ["MacBook Air 13", "MacBook Air (M1)"],
+               screenSize: PixelSize(2560, 1600), cornerRadius: 0, priority: 100,
+               framePrefix: "Apple MacBook Air", colors: ["Gold", "Silver", "Space Gray"], defaultColor: "Space Gray",
+               frameOrientation: .landscape),
+        Device(name: "MacBook Pro 13", aliases: ["MacBook Pro (13-inch)"],
+               screenSize: PixelSize(2560, 1600), cornerRadius: 0, priority: 90,
+               framePrefix: "Apple MacBook Pro 13", colors: ["Silver", "Space Gray"], defaultColor: "Space Gray",
+               frameOrientation: .landscape),
+
+        // 1440x900 — no upstream frame; borrows MacBook Air (same aspect, no crop).
+        Device(name: "MacBook Air (13-inch, 2017)",
+               screenSize: PixelSize(1440, 900), cornerRadius: 0, priority: 100,
+               framePrefix: "Apple MacBook Air", frameScreenSize: PixelSize(2560, 1600),
+               colors: ["Gold", "Silver", "Space Gray"], defaultColor: "Silver", frameOrientation: .landscape),
+
+        // 1280x800 — no upstream frame; borrows MacBook Pro 13 (same aspect, no crop).
+        Device(name: "MacBook Pro (13-inch, 2012)",
+               screenSize: PixelSize(1280, 800), cornerRadius: 0, priority: 100,
+               framePrefix: "Apple MacBook Pro 13", frameScreenSize: PixelSize(2560, 1600),
+               colors: ["Silver", "Space Gray"], defaultColor: "Silver", frameOrientation: .landscape),
     ]
 }

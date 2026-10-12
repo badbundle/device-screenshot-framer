@@ -23,6 +23,10 @@ public struct PixelSize: Hashable, Sendable, Codable {
     public var cgSize: CGSize { CGSize(width: width, height: height) }
 
     public var isLandscape: Bool { width > height }
+
+    /// The smaller of width and height: what sizes given as a share of a page are measured against, so they look the
+    /// same on a portrait page and a landscape one.
+    public var shorterSide: Double { Double(min(width, height)) }
 }
 
 extension PixelSize: CustomStringConvertible {

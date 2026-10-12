@@ -45,7 +45,12 @@ struct ListDevicesCommand: ParsableCommand {
             }
             print(line)
         }
-        print("\n* default colour. Sizes are portrait; landscape screenshots are detected automatically.")
+        print("""
+
+            * default colour. Sizes are as each frame is drawn: portrait for iPhone and iPad, whose landscape screenshots
+            are detected automatically, and landscape for Mac. Any screenshot can be shown as a Mac window instead
+            (--frame window).
+            """)
     }
 
     private struct DeviceRow: Encodable {

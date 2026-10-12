@@ -4,7 +4,8 @@ public struct Device: Sendable, Hashable {
     public let name: String
     /// Other devices that share `screenSize` and render acceptably with this frame. Display only.
     public let aliases: [String]
-    /// Native portrait screenshot size in pixels.
+    /// Native screenshot size in pixels, in the orientation the frame is drawn in: portrait for iPhone and iPad,
+    /// landscape for Mac.
     public let screenSize: PixelSize
     /// Screen corner radius in native pixels. 0 for square-cornered screens.
     public let cornerRadius: Double
@@ -20,6 +21,8 @@ public struct Device: Sendable, Hashable {
     /// Colours available upstream (informational; FrameStore validates against the live manifest).
     public let colors: [String]
     public let defaultColor: String
+    /// How the frame image is drawn. iPhones and iPads are portrait and turn for landscape screenshots; Macs don't turn.
+    public let frameOrientation: Orientation
 
     public init(
         name: String,
@@ -31,7 +34,8 @@ public struct Device: Sendable, Hashable {
         frameSuffix: String = "",
         frameScreenSize: PixelSize? = nil,
         colors: [String],
-        defaultColor: String
+        defaultColor: String,
+        frameOrientation: Orientation = .portrait
     ) {
         self.name = name
         self.aliases = aliases
@@ -43,6 +47,7 @@ public struct Device: Sendable, Hashable {
         self.frameScreenSize = frameScreenSize
         self.colors = colors
         self.defaultColor = defaultColor
+        self.frameOrientation = frameOrientation
     }
 
     /// Screen size the frame's cutout was drawn for.
@@ -52,6 +57,11 @@ public struct Device: Sendable, Hashable {
     public var usesBorrowedFrame: Bool { frameScreenSize != nil }
 
     public var isIPad: Bool { name.hasPrefix("iPad") }
+
+    public var isMac: Bool { name.hasPrefix("MacBook") }
+
+    /// Whether a screenshot in the other orientation turns the frame. Only portrait frames do.
+    public var canRotate: Bool { frameOrientation == .portrait }
 
     public func frameFilename(color: String) -> String {
         "\(framePrefix) \(color)\(frameSuffix).png"

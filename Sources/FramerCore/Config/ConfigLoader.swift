@@ -95,6 +95,7 @@ public enum ConfigLoader {
             }
             return RenderJob.PlacedDevice(
                 input: resolve(path, against: baseDirectory),
+                frameStyle: device.frame ?? entry.frame ?? config.frame,
                 deviceName: device.device ?? entry.device ?? config.device,
                 frameColor: device.frameColor ?? entry.frameColor ?? config.frameColor,
                 landscapeSide: device.landscapeSide ?? entry.landscapeSide ?? config.landscapeSide,
@@ -157,6 +158,8 @@ public enum ConfigLoader {
             format: config.output.format,
             jpegQuality: config.output.jpegQuality,
             mode: config.mode,
+            frameStyle: entry.frame ?? config.frame,
+            window: config.window.style,
             deviceName: entry.device ?? config.device,
             frameColor: entry.frameColor ?? config.frameColor,
             landscapeSide: entry.landscapeSide ?? config.landscapeSide,

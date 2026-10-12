@@ -8,6 +8,10 @@ public struct RenderJob: Sendable, Hashable {
     public var format: OutputFormat
     public var jpegQuality: Double
     public var mode: RenderMode
+    /// Device frame or Mac window, for the job's `input` and any placed device that doesn't set its own.
+    public var frameStyle: FrameStyle
+    /// How every window in the job looks.
+    public var window: WindowStyle
     public var deviceName: String?
     public var frameColor: String?
     public var landscapeSide: LandscapeSide
@@ -97,16 +101,25 @@ public struct RenderJob: Sendable, Hashable {
         var resolvedPages: [Page] { pages.isEmpty ? [Page(title: title, subtitle: subtitle, accent: accent)] : pages }
     }
 
-    /// One screenshot in a device frame at an explicit position.
+    /// One screenshot in a device frame, or as a window, at an explicit position.
     public struct PlacedDevice: Sendable, Hashable {
         public var input: URL
+        public var frameStyle: FrameStyle
         public var deviceName: String?
         public var frameColor: String?
         public var landscapeSide: LandscapeSide
         public var placement: DevicePlacement
 
-        public init(input: URL, deviceName: String? = nil, frameColor: String? = nil, landscapeSide: LandscapeSide = .left, placement: DevicePlacement) {
+        public init(
+            input: URL,
+            frameStyle: FrameStyle = .device,
+            deviceName: String? = nil,
+            frameColor: String? = nil,
+            landscapeSide: LandscapeSide = .left,
+            placement: DevicePlacement
+        ) {
             self.input = input
+            self.frameStyle = frameStyle
             self.deviceName = deviceName
             self.frameColor = frameColor
             self.landscapeSide = landscapeSide
@@ -133,6 +146,8 @@ public struct RenderJob: Sendable, Hashable {
         format: OutputFormat = .png,
         jpegQuality: Double = 0.9,
         mode: RenderMode = .simple,
+        frameStyle: FrameStyle = .device,
+        window: WindowStyle = WindowStyle(),
         deviceName: String? = nil,
         frameColor: String? = nil,
         landscapeSide: LandscapeSide = .left,
@@ -146,6 +161,8 @@ public struct RenderJob: Sendable, Hashable {
         self.format = format
         self.jpegQuality = jpegQuality
         self.mode = mode
+        self.frameStyle = frameStyle
+        self.window = window
         self.deviceName = deviceName
         self.frameColor = frameColor
         self.landscapeSide = landscapeSide
@@ -168,13 +185,16 @@ public struct RenderJob: Sendable, Hashable {
         }
     }
 
-    typealias Source = (input: URL, deviceName: String?, frameColor: String?, landscapeSide: LandscapeSide)
+    typealias Source = (input: URL, frameStyle: FrameStyle, deviceName: String?, frameColor: String?, landscapeSide: LandscapeSide)
 
     /// The screenshots this job frames, in drawing order.
     var sources: [Source] {
         guard mode == .inset, let devices = inset?.devices, !devices.isEmpty else {
-            return [(input, deviceName, frameColor, landscapeSide)]
+            return [(input, frameStyle, deviceName, frameColor, landscapeSide)]
         }
-        return devices.map { ($0.input, $0.deviceName, $0.frameColor, $0.landscapeSide) }
+        return devices.map { ($0.input, $0.frameStyle, $0.deviceName, $0.frameColor, $0.landscapeSide) }
     }
+
+    /// Whether any screenshot goes in a device frame, so the frames manifest is needed.
+    var needsFrames: Bool { sources.contains { $0.frameStyle == .device } }
 }

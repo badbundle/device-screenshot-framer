@@ -1,6 +1,6 @@
 # device-screenshot-framer
 
-`framer` is a macOS command-line tool that drops iOS and iPadOS screenshots into Apple device frames, optionally with a marketing title, subtitle and gradient background — the kind of image you upload to App Store Connect.
+`framer` is a macOS command-line tool that drops iOS, iPadOS and macOS screenshots into Apple device frames, or shows a Mac app's window on its own, optionally with a marketing title, subtitle and gradient background — the kind of image you upload to App Store Connect.
 
 <table>
   <tr>
@@ -33,9 +33,19 @@
   <tr><td colspan="3" align="center"><sub>panorama: one canvas cut into three App Store images</sub></td></tr>
 </table>
 
-- Detects the device from the screenshot's pixel size (iPhone 5s → iPhone 17 Pro Max / Air, iPads), or force one with `--device`.
+<table>
+  <tr>
+    <td align="center"><img src="docs/examples/mac-window.png" width="280" alt="A Mac app's window, frameless, with a shadow under a title"><br><sub><code>"frame": "window"</code></sub></td>
+    <td align="center"><img src="docs/examples/mac-two-windows.png" width="280" alt="A light main window and a dark Settings window, with one row called out"><br><sub>two windows and a callout</sub></td>
+    <td align="center"><img src="docs/examples/mac-macbook.png" width="280" alt="A full-screen Mac capture in a MacBook Air frame"><br><sub>MacBook Air</sub></td>
+  </tr>
+  <tr><td colspan="3" align="center"><sub>Mac App Store, 2880×1800</sub></td></tr>
+</table>
+
+- Detects the device from the screenshot's pixel size (iPhone 5s → iPhone 17 Pro Max / Air, iPads, MacBooks at every Mac App Store size), or force one with `--device`.
 - Portrait and landscape (choose which side the notch / Dynamic Island ends up on).
-- Output at any size up to the screenshot's native size, aspect-fit and centred.
+- **Mac windows**: a Mac app's window capture of any size, frameless with rounded corners and a shadow, the usual Mac App Store look.
+- Output at any size up to the screenshot's native size (for Mac, up to 2880×1800, the Mac App Store's largest), aspect-fit and centred.
 - **Inset mode**: title + subtitle above or below the device on a linear gradient, rendered with CoreText (system SF font or any installed font).
 - **Layouts** (inset mode): let the device bleed off the edge, place and rotate one or more devices anywhere (hero crops, overlapping pairs), enlarge part of a screen into a zoom callout, add drop shadows, and cut one wide canvas into a panorama of several images. The text follows placed devices: it moves down to them (or stays at the top), grows or shrinks to fill the room, and tilts slightly with them.
 - **Style** (inset mode): soft glows and pictures (a logo, a shape) over the background gradient, one accented word per title, and a shadow or coloured glow of its own for each callout card.
@@ -62,6 +72,7 @@ Device frames are downloaded on demand from [fastlane/frameit-frames](https://gi
   - [Layouts](#layouts)
 - [How images are built](#how-images-are-built)
 - [Devices](#devices)
+  - [Mac](#mac)
 - [Frames cache](#frames-cache)
 - [Using FramerCore as a library](#using-framercore-as-a-library)
 - [Reproducing the example images](#reproducing-the-example-images)
@@ -114,7 +125,7 @@ framer <subcommand> [options]
 
 ### `framer frame`
 
-Put screenshots into device frames (simple mode — no text, no background unless asked for).
+Put screenshots into device frames, or show them as Mac windows (simple mode — no text, no background unless asked for).
 
 ```
 framer frame [options] <inputs> ...
@@ -126,16 +137,17 @@ framer frame [options] <inputs> ...
 | `-o, --output-dir <dir>` | `framed` | Directory for framed images. Created if missing. Output file name = input basename + format extension. |
 | `--width <px>` | screenshot width | Output canvas width. |
 | `--height <px>` | screenshot height | Output canvas height. |
-| `--device <name>` | auto | Force a device by name or alias (case-insensitive), e.g. `"iPhone 17 Pro"`, `"iPad Pro 13"`. See [`list-devices`](#framer-list-devices). |
+| `--frame <device\|window>` | `device` | `device` puts each screenshot in an Apple device frame; `window` shows it as a frameless Mac window, whatever its size. See [Mac](#mac). |
+| `--device <name>` | auto | Force a device by name or alias (case-insensitive), e.g. `"iPhone 17 Pro"`, `"iPad Pro 13"`, `"MacBook Air"`. See [`list-devices`](#framer-list-devices). |
 | `--color <name>` | device default | Frame colour, e.g. `"Deep Blue"`, `"Natural Titanium"`. Unknown colours fall back to the device default with a warning. |
 | `--format <png\|jpeg>` | `png` | Output format. JPEG is flattened onto white when there is no background. |
 | `--background <hex[,hex...]>` | none (transparent) | One colour for a solid fill, two or more comma-separated for a linear gradient. |
 | `--angle <degrees>` | `180` | Gradient direction, CSS convention (`0` bottom→top, `90` left→right, `180` top→bottom). |
-| `--landscape-side <left\|right>` | `left` | For landscape screenshots: which side the notch / Dynamic Island is on. |
+| `--landscape-side <left\|right>` | `left` | For landscape iPhone and iPad screenshots: which side the notch / Dynamic Island is on. |
 
 Plus the [global options](#global-options).
 
-Sizing rules (see [How images are built](#how-images-are-built)): give both `--width` and `--height` for an exact canvas; give one and the other follows the framed image's aspect ratio; give neither for the screenshot's native size. Either dimension is capped at the screenshot's native size — the tool never upscales.
+Sizing rules (see [How images are built](#how-images-are-built)): give both `--width` and `--height` for an exact canvas; give one and the other follows the framed image's aspect ratio; give neither for the screenshot's native size. Either dimension is capped at the screenshot's native size — the tool never upscales. Mac screenshots, windows and MacBooks alike, are sized against 2880×1800 instead (see [Mac](#mac)).
 
 ### `framer render`
 
@@ -169,7 +181,7 @@ Downloads run six at a time; files already in the cache are skipped. Non-Apple f
 
 ### `framer list-devices`
 
-List every supported device with its portrait screenshot size, available frame colours (default marked with `*`), aliases, and whether it borrows another device's frame.
+List every supported device with its screenshot size as its frame is drawn (portrait for iPhone and iPad, landscape for Mac), available frame colours (default marked with `*`), aliases, and whether it borrows another device's frame.
 
 ```
 framer list-devices [--json]
@@ -247,16 +259,18 @@ Used by `framer render`. JSON, UTF-8. Every key except `screenshots` is optional
 | `outputDirectory` | string | `"framed"` | Where files are written. Relative to the config file. `--output-dir` overrides. |
 | `output` | object | see below | Canvas size and file format. |
 | `mode` | `"simple"` \| `"inset"` | `"simple"` | `simple` = frame only. `inset` = frame + text + background. |
+| `frame` | `"device"` \| `"window"` | `"device"` | Default for every entry: an Apple device frame, or a frameless Mac window. See [Mac](#mac). |
+| `window` | object | see [`window`](#window) | How screenshots shown as windows look. |
 | `device` | string \| null | auto-detect | Default device (name or alias) for every entry. |
 | `frameColor` | string \| null | device default | Default frame colour for every entry. |
 | `landscapeSide` | `"left"` \| `"right"` | `"left"` | Default notch side for landscape screenshots. |
 | `background` | object \| null | none | Default background. In simple mode, none means transparent padding. In inset mode, none means white. |
 | `text` | object | see below | Text styling for inset mode. Ignored in simple mode. |
-| `padding` | number | 5 % of canvas width | Inset mode: distance in pixels from the canvas edge to the text and the device. |
+| `padding` | number | 5 % of the canvas's shorter side | Inset mode: distance in pixels from the canvas edge to the text and the device. The shorter side is the width of a portrait canvas, the height of a landscape one. |
 | `gap` | number | = `padding` | Inset mode: distance between the text block and the device. |
 | `deviceScale` | number | `1.0` | Inset mode: multiplier on the device size within its available area. `1` fills the area; `0.8` leaves 20 % breathing room. The device stays pinned to the edge opposite the text. With `bleed`, a multiplier on the device width instead. |
 | `bleed` | boolean | `false` | Inset mode: size the device to the text column's width (`× deviceScale`), pin it `gap` below (or above) the text, and let whatever doesn't fit run off the opposite edge. Applies only to the automatic layout, not to `devices`. See [Layouts](#layouts). |
-| `shadow` | `true` \| object \| null | none | Inset mode: drop shadow under every device and callout card. `true` uses the defaults. See [`shadow`](#shadow). |
+| `shadow` | `true` \| object \| null | none | Inset mode: drop shadow under every device and callout card. `true` uses the defaults. Windows cast the default shadow even without it. See [`shadow`](#shadow). |
 | `screenshots` | array | **required** | One entry per input image (or per panorama). |
 
 ### `output`
@@ -268,7 +282,7 @@ Used by `framer render`. JSON, UTF-8. Every key except `screenshots` is optional
 | `format` | `"png"` \| `"jpeg"` | `"png"` | PNG keeps transparency. JPEG is flattened onto white if there is no background. |
 | `jpegQuality` | number 0–1 | `0.9` | JPEG compression quality. |
 
-Sizing: both dims → exact canvas; one dim → the other follows the framed image's aspect; neither → native screenshot size. Never exceeds the screenshot's native size (a warning is printed if clamped).
+Sizing: both dims → exact canvas; one dim → the other follows the framed image's aspect; neither → native screenshot size. Never exceeds the screenshot's native size (a warning is printed if clamped). For Mac screenshots, read 2880×1800 for both "framed image" and "native screenshot size": the canvas defaults to 2880×1800, one dimension gives 16:10, and nothing goes above it.
 
 ### `background`
 
@@ -315,9 +329,21 @@ A PNG or JPEG drawn over the gradient and its glows, under the devices: a logo, 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `color` | hex string | `"#00000073"` | Shadow colour, alpha allowed. |
-| `radius` | number | 5 % of canvas width | Blur radius in pixels. |
+| `radius` | number | 5 % of the canvas's shorter side | Blur radius in pixels. |
 | `offsetX` | number | `0` | Horizontal offset in pixels. |
-| `offsetY` | number | 2 % of canvas width | Vertical offset in pixels, positive = down. Rotated devices still cast downwards. |
+| `offsetY` | number | 2 % of the canvas's shorter side | Vertical offset in pixels, positive = down. Rotated devices still cast downwards. |
+
+Windows always cast a shadow in inset mode: this one if it's set, otherwise its defaults.
+
+### `window`
+
+How screenshots with `"frame": "window"` look. Sizes are in the screenshot's own pixels, so they scale with the window.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `cornerRadius` | number | `36` | Corner radius: about a macOS 26 window's, captured at 2×. A capture with transparent corners of its own keeps them. |
+| `borderWidth` | number | `2` | Hairline just inside the edge, as macOS draws round a window. `0` for none. |
+| `borderColor` | hex string | `"#80808059"` | Hairline colour; the grey reads on light and dark windows alike. |
 
 ### `text`
 
@@ -352,6 +378,7 @@ Text is word-wrapped to the canvas width minus padding and centred. An entry's (
 | `title` | string | none | Inset mode title. |
 | `subtitle` | string | none | Inset mode subtitle. |
 | `accent` | string | none | Inset mode: part of `title` drawn in `text.accentColor`, e.g. `"secret."` in `"Every code.\nEvery secret."`. It must appear in the title. |
+| `frame` | `"device"` \| `"window"` | top-level `frame` | Device frame or Mac window for this entry. |
 | `device` | string | top-level `device` | Force a device for this entry. |
 | `frameColor` | string | top-level `frameColor` | Frame colour for this entry. |
 | `output` | string | input basename | Output file name without extension. |
@@ -461,6 +488,7 @@ Panorama pages share one scale and move the same distance, so their text lines u
 | `y` | number | `0.5` | Vertical centre, in page heights. |
 | `width` | number | `0.8` | Device width (frame included), in page widths. Height follows the frame's aspect. |
 | `rotation` | number | `0` | Degrees clockwise about the device's centre. |
+| `frame` | `"device"` \| `"window"` | entry's, then top-level `frame` | Device frame or Mac window, so a window can sit beside a MacBook. |
 | `device` | string | entry's, then top-level `device` | Force a device. |
 | `frameColor` | string | entry's, then top-level `frameColor` | Frame colour. |
 | `landscapeSide` | `"left"` \| `"right"` | entry's, then top-level `landscapeSide` | Notch side for a landscape screenshot. |
@@ -481,8 +509,8 @@ A callout copies a rectangle of a device's screenshot into a card, enlarged, wit
 | `offsetY` | number | `0` | As `offsetX`; positive is down the screen. |
 | `scale` | number | `1.5` | Card size relative to the region's size on the device. |
 | `rotation` | number | the device's | Card rotation in degrees clockwise. |
-| `cornerRadius` | number | 3 % of canvas width | Card corner radius in pixels. |
-| `borderWidth` | number | 0.8 % of canvas width | Card border in pixels. `0` for none. |
+| `cornerRadius` | number | 3 % of the canvas's shorter side | Card corner radius in pixels. |
+| `borderWidth` | number | 0.8 % of the canvas's shorter side | Card border in pixels. `0` for none. |
 | `borderColor` | hex string | `"#FFFFFF"` | Card border and region outline colour. |
 | `highlight` | boolean | `true` | Outline the region on the device. |
 | `shadow` | `true` \| `false` \| object | top-level `shadow` | The card's own shadow, replacing the one devices cast: `false` for none, `true` for the defaults, or a [`shadow`](#shadow) object. With `offsetY: 0` and a colour, it is a glow around the card. |
@@ -505,12 +533,12 @@ A panorama needs `devices` (the automatic layout only handles one device on one 
 
 ## How images are built
 
-1. **Detect** the device from the screenshot's pixel size (either orientation). `--device` / `device` overrides; if the forced device's size differs from the screenshot, the screenshot is scaled to fill the frame's screen and a warning is printed.
-2. **Fetch the frame** for that device and colour from the cache, downloading it if needed.
-3. **Composite at the frame's native pixel size.** The screenshot is aspect-filled into the screen cutout and clipped to the device's real display corner radius; the frame is drawn on top so the notch / Dynamic Island covers it. Landscape screenshots rotate the frame (90° counter-clockwise for `left`, clockwise for `right`).
-4. **Size the canvas** (`width` / `height` rules above, using the first device) and **aspect-fit** the framed image into it, centred.
+1. **Detect** the device from the screenshot's pixel size (either orientation for iPhone and iPad; Macs only landscape). `--device` / `device` overrides; if the forced device's size differs from the screenshot, the screenshot is scaled to fill the frame's screen and a warning is printed. A window (`frame: window`) skips this and the next step.
+2. **Fetch the frame** for that device and colour from the cache, downloading it if needed. A config with only windows never touches the cache or the network.
+3. **Composite at the frame's native pixel size.** The screenshot is aspect-filled into the screen cutout and clipped to the device's real display corner radius; the frame is drawn on top so the notch / Dynamic Island covers it. Landscape iPhone and iPad screenshots rotate the frame (90° counter-clockwise for `left`, clockwise for `right`); Mac frames are drawn landscape already. A window is the screenshot at its own size, with its corners rounded and a hairline inside its edge.
+4. **Size the canvas** (`width` / `height` rules above, using the first device; 2880×1800 for Mac) and **aspect-fit** the framed image into it, centred.
 5. **Simple mode**: fill the background if one is set, draw the framed image.
-   **Inset mode**: fill the background, draw its glows and images, and measure the title and subtitle. Place the device: by default fitted into what the text leaves (full width minus `padding`, pinned to the edge opposite the text with `gap` between them); with `bleed`, sized to that width and allowed to run off the far edge; with `devices`, wherever each one says, after which the text tilts, scales and moves to sit `gap` from them. Draw the devices with their shadow, callout outlines and cards, then the text at `position`. A panorama does all of this on one canvas `pages` wide and then cuts it into pages.
+   **Inset mode**: fill the background, draw its glows and images, and measure the title and subtitle. Place the device: by default fitted into what the text leaves (full width minus `padding`, pinned to the edge opposite the text with `gap` between them); with `bleed`, sized to that width and allowed to run off the far edge; with `devices`, wherever each one says, after which the text tilts, scales and moves to sit `gap` from them. Draw the devices with their shadow (a window's own, if `shadow` isn't set), callout outlines and cards, then the text at `position`. A panorama does all of this on one canvas `pages` wide and then cuts it into pages.
 6. **Write** PNG (RGBA) or JPEG (flattened), one file per page.
 
 ---
@@ -542,6 +570,13 @@ Detection is by exact pixel size. `framer list-devices` prints the full table. `
 | 1640×2360 | iPad Air (2020) | iPad Air 4/5, Air 11-inch, iPad 10th gen, iPad (A16) |
 | 1620×2160 | iPad 10.2 | iPad 7th–9th gen |
 | 1536×2048 | iPad Mini (2019) | iPad Air 2 |
+| 3072×1920 | MacBook Pro 16 | — |
+| 2880×1800 | MacBook Pro 15 | — |
+| 2560×1600 | MacBook Air | MacBook Pro 13 |
+| 1440×900 | MacBook Air (13-inch, 2017) | — |
+| 1280×800 | MacBook Pro (13-inch, 2012) | — |
+
+Mac sizes are landscape, as the frames are drawn, and are only detected that way round. The four 16:10 sizes the Mac App Store takes are all detected, so a full-screen capture at any of them goes straight into a MacBook.
 
 When several devices share a size, the newest is detected by default; pass `--device` to pick another (e.g. `--device "iPhone 16 Pro"` for the titanium frames on a 1206×2622 screenshot).
 
@@ -553,8 +588,38 @@ When several devices share a size, the newest is detected by default; pass `--de
 | iPhone Air (1260×2736) | iPhone 17 | ~1 px |
 | iPad Pro 13" M4, iPad Air 13" (2064×2752) | iPad Pro 12.9" (4th gen) | ~0.7 % |
 | iPad Pro 11" M4 (1668×2420) | iPad Pro 11" | 16 px top/bottom |
+| MacBook Pro 15" (2880×1800) | MacBook Pro 16" | none (same 16:10) |
+| MacBook Air 13" 2017 (1440×900) | MacBook Air | none (same 16:10) |
+| MacBook Pro 13" 2012 (1280×800) | MacBook Pro 13" | none (same 16:10) |
 
-iPad mini 6/7 (1488×2266) is deliberately unsupported: the nearest frame would crop 3 %. Force it with `--device "iPad Air (2020)"` if you accept that.
+iPad mini 6/7 (1488×2266) is deliberately unsupported: the nearest frame would crop 3 %. Force it with `--device "iPad Air (2020)"` if you accept that. The notched MacBooks (14", 15" and 16" since 2021) have no frame in frameit-frames and aren't 16:10, so their screenshots go in as windows or, cropped or resized to 16:10, in a MacBook.
+
+### Mac
+
+The Mac App Store takes screenshots at 1280×800, 1440×900, 2560×1600 or 2880×1800, from any Mac. So for Mac screenshots, windows and MacBooks alike, the canvas defaults to 2880×1800, a single `width` or `height` keeps 16:10, and nothing goes above 2880×1800, whatever the capture's own size.
+
+There are two ways to show a Mac app:
+
+- **In a MacBook** (`"frame": "device"`, the default): a full-screen capture, detected by its size like an iPhone's.
+- **As a window** (`"frame": "window"`): a capture of the app's window at any size, drawn with rounded corners and a hairline (see [`window`](#window)), casting the default [`shadow`](#shadow) in inset mode. This is the usual Mac App Store look. Capture at 2× (a Retina display), without the window's own shadow (`screencapture -o -l <window>`, or ScreenCaptureKit's `ignoreShadowsSingleWindow`), so the framer's shadow is the only one.
+
+Everything in [Layouts](#layouts) works on the landscape canvas: placed devices and windows, callouts, panoramas, text fitted to them. Sizes given as a share of the page (the default `padding`, shadow and callout corners) are taken from its shorter side, so they look the same as on a portrait page.
+
+```jsonc
+// A window under the title, and a Settings window over it.
+{
+  "mode": "inset",
+  "frame": "window",
+  "output": { "width": 2880, "height": 1800 },
+  "screenshots": [{
+    "title": "Every code. Every secret.",
+    "devices": [
+      { "path": "raw/main.png", "x": 0.44, "y": 0.64, "width": 0.72 },
+      { "path": "raw/settings.png", "x": 0.82, "y": 0.6, "width": 0.25 }
+    ]
+  }]
+}
+```
 
 ---
 
@@ -622,14 +687,17 @@ For layouts, `RenderJob.InsetSettings` also takes `bleed`, `shadow: ShadowSpec?`
 
 `Renderer.run` never throws; it returns per-job outcomes and errors. `Outcome.outputs` has one URL per page and `Outcome.screens` one entry per device. For finer control, `Renderer.prepare(_:manifest:)` (async: detect device, fetch frame) and `Renderer.render(_:)` (synchronous: all CoreGraphics work) can be called separately. Loading a config file: `ConfigLoader.load(url)` → `ConfigLoader.jobs(from:baseDirectory:)`.
 
+`RenderJob` and `RenderJob.PlacedDevice` take `frameStyle: FrameStyle` (`.device` or `.window`), and `RenderJob` the `window: WindowStyle` its windows are drawn with. A window's `Renderer.Screen` has no `device` or `frame`, so `Screen.device`, `Screen.frame`, `Outcome.device` and `Outcome.frameColor` are optional, and `Renderer.prepare` takes a `nil` manifest when every screenshot is a window.
+
 Lower-level pieces, all public:
 
 | Type | Role |
 |---|---|
-| `DeviceCatalog` / `Device` | The device table: `detect(PixelSize)`, `named(String)`. |
+| `DeviceCatalog` / `Device` | The device table: `detect(PixelSize)`, `named(String)`, `macAppStoreSizes`, `macCanvas`. `Device.frameOrientation` says how its frame is drawn, and `canRotate` whether it turns for the other orientation. |
 | `FrameStore` / `FrameManifest` / `FrameResolver` | Download, cache and resolve frames and their screen offsets. `FrameStore.fetch` is injectable for tests. |
 | `FrameGeometry` / `OrientedGeometry` | Cutout rect, aspect-fill/fit maths, landscape transforms. |
 | `FrameCompositor` | Screenshot + frame → framed `CGImage` at native size. |
+| `FrameStyle` / `WindowStyle` / `WindowCompositor` | Device frame or Mac window; how a window looks; screenshot → window `CGImage`. |
 | `SimpleRenderer` / `InsetRenderer` / `InsetLayout` | The two output modes; `InsetLayout.compute` is pure layout maths. `InsetRenderer.render(layers:callouts:canvas:background:backdrop:pages:style:)` draws several devices and pages. |
 | `DevicePlacement` / `PlacedRect` | Device positions in page units, and the resolved (rotated) rect on the canvas. |
 | `CalloutSpec` / `CalloutShadow` / `CalloutLayout` / `CalloutRenderer` | Zoom callouts: settings, each card's shadow, pure layout maths, drawing. |
@@ -669,9 +737,14 @@ framer render --config docs/examples/inset-solid.json    # solid background, dev
 # captured from Photos and Maps the same way)
 framer render --config docs/examples/layouts.json        # bleed, hero crop, two devices, callout
 framer render --config docs/examples/panorama.json       # three-page panorama
+
+# Mac (raw/mac-window.png: a Mac app's main window, and raw/mac-settings-dark.png: its Settings window in dark,
+# each captured at 2x without its shadow)
+framer render --config docs/examples/mac-desktop.json    # a 2560x1600 "desktop" from the window, for the MacBook
+framer render --config docs/examples/mac.json            # window, two windows with a callout, MacBook
 ```
 
-The committed PNGs are downscaled to 640 px for the README; the tool's output is full resolution.
+The committed PNGs are downscaled to 640 px for the README (the Mac ones to 900 px); the tool's output is full resolution.
 
 ---
 
@@ -679,7 +752,7 @@ The committed PNGs are downscaled to 640 px for the README; the tool's output is
 
 ```sh
 swift build
-swift test          # 144 tests; synthetic frames, no network
+swift test          # 164 tests; synthetic frames, no network
 ```
 
 - `Sources/FramerCore` — the library (device table, frame store, geometry, rendering, config, pipeline).

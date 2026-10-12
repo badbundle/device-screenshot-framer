@@ -3,10 +3,10 @@ import CoreGraphics
 /// A drop shadow cast by devices and callout cards.
 public struct ShadowSpec: Sendable, Hashable {
     public var color: RGBAColor
-    /// Blur radius in pixels. `nil` = 5 % of the page width.
+    /// Blur radius in pixels. `nil` = 5 % of the page's shorter side.
     public var radius: Double?
     public var offsetX: Double
-    /// Pixels, positive = down. `nil` = 2 % of the page width.
+    /// Pixels, positive = down. `nil` = 2 % of the page's shorter side.
     public var offsetY: Double?
 
     public init(color: RGBAColor = RGBAColor(red: 0, green: 0, blue: 0, alpha: 0.45), radius: Double? = nil, offsetX: Double = 0, offsetY: Double? = nil) {
@@ -16,11 +16,11 @@ public struct ShadowSpec: Sendable, Hashable {
         self.offsetY = offsetY
     }
 
-    func apply(to ctx: CGContext, pageWidth: Double) {
+    func apply(to ctx: CGContext, page: PixelSize) {
         // Shadow offsets are in device space (y-up) and ignore the CTM, so rotated content still casts downwards.
         ctx.setShadow(
-            offset: CGSize(width: offsetX, height: -(offsetY ?? (pageWidth * 0.02).rounded())),
-            blur: radius ?? (pageWidth * 0.05).rounded(),
+            offset: CGSize(width: offsetX, height: -(offsetY ?? (page.shorterSide * 0.02).rounded())),
+            blur: radius ?? (page.shorterSide * 0.05).rounded(),
             color: color.cgColor
         )
     }
