@@ -17,6 +17,10 @@ public struct RenderJob: Sendable, Hashable {
     public var landscapeSide: LandscapeSide
     public var requestedWidth: Int?
     public var requestedHeight: Int?
+    /// Keep the canvas within the screenshot's native size (2880×1800 for Mac).
+    public var clampsSize: Bool
+    /// Write PNG without an alpha channel, flattened onto white.
+    public var opaque: Bool
     public var background: GradientSpec?
     public var inset: InsetSettings?
 
@@ -153,6 +157,8 @@ public struct RenderJob: Sendable, Hashable {
         landscapeSide: LandscapeSide = .left,
         requestedWidth: Int? = nil,
         requestedHeight: Int? = nil,
+        clampsSize: Bool = true,
+        opaque: Bool = false,
         background: GradientSpec? = nil,
         inset: InsetSettings? = nil
     ) {
@@ -168,6 +174,8 @@ public struct RenderJob: Sendable, Hashable {
         self.landscapeSide = landscapeSide
         self.requestedWidth = requestedWidth
         self.requestedHeight = requestedHeight
+        self.clampsSize = clampsSize
+        self.opaque = opaque
         self.background = background
         self.inset = inset
     }

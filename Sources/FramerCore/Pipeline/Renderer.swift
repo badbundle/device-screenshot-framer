@@ -171,7 +171,8 @@ public struct Renderer: Sendable {
             requestedWidth: job.requestedWidth,
             requestedHeight: job.requestedHeight,
             native: isMac ? DeviceCatalog.macCanvas : primary.screenshot.pixelSize,
-            framedSize: isMac ? DeviceCatalog.macCanvas : primary.framed.pixelSize
+            framedSize: isMac ? DeviceCatalog.macCanvas : primary.framed.pixelSize,
+            clamp: job.clampsSize
         )
         if sizing.clamped {
             let limit = isMac ? "\(DeviceCatalog.macCanvas), the largest Mac App Store size," : "native \(primary.screenshot.pixelSize)"
@@ -259,7 +260,7 @@ public struct Renderer: Sendable {
 
         let outputs = job.outputURLs
         for (image, url) in zip(results, outputs) {
-            try ImageWriter.write(image, to: url, format: job.format, jpegQuality: job.jpegQuality)
+            try ImageWriter.write(image, to: url, format: job.format, jpegQuality: job.jpegQuality, opaque: job.opaque)
         }
         return Outcome(job: job, outputs: outputs, screens: prepared.screens, size: canvas)
     }

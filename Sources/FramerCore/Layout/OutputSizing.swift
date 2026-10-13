@@ -7,12 +7,13 @@ public enum OutputSizing {
 
     /// Resolves the output canvas size.
     /// - Both dims given: used as-is. One dim: the other follows the framed image's aspect. None: native screenshot size.
-    /// - Never exceeds the native screenshot size in either dimension.
+    /// - Unless `clamp` is false, never exceeds the native screenshot size in either dimension.
     public static func resolve(
         requestedWidth: Int?,
         requestedHeight: Int?,
         native: PixelSize,
-        framedSize: PixelSize
+        framedSize: PixelSize,
+        clamp: Bool = true
     ) -> Result {
         let aspect = Double(framedSize.height) / Double(framedSize.width)
         var size: PixelSize
@@ -28,11 +29,11 @@ public enum OutputSizing {
         }
 
         var clamped = false
-        if size.width > native.width {
+        if clamp, size.width > native.width {
             size.width = native.width
             clamped = true
         }
-        if size.height > native.height {
+        if clamp, size.height > native.height {
             size.height = native.height
             clamped = true
         }

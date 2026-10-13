@@ -165,6 +165,8 @@ public enum ConfigLoader {
             landscapeSide: entry.landscapeSide ?? config.landscapeSide,
             requestedWidth: config.output.width,
             requestedHeight: config.output.height,
+            clampsSize: config.output.clamp,
+            opaque: config.output.opaque,
             background: background?.gradient,
             inset: inset
         )

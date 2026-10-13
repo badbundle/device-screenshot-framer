@@ -13,11 +13,12 @@ public enum OutputFormat: String, Sendable, Codable, CaseIterable {
 }
 
 public enum ImageWriter {
-    /// Writes `image` to `url`, creating parent directories. JPEG output is flattened onto white.
-    public static func write(_ image: CGImage, to url: URL, format: OutputFormat, jpegQuality: Double = 0.9) throws {
+    /// Writes `image` to `url`, creating parent directories. JPEG output, and PNG output when `opaque`, is flattened onto
+    /// white, with no alpha channel.
+    public static func write(_ image: CGImage, to url: URL, format: OutputFormat, jpegQuality: Double = 0.9, opaque: Bool = false) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        let output = format == .jpeg ? flatten(image, onto: .white) : image
+        let output = format == .jpeg || opaque ? flatten(image, onto: .white) : image
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL, format.utType.identifier as CFString, 1, nil) else {
             throw FramerError.write(url)
         }
