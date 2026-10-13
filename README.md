@@ -45,7 +45,7 @@
 - Detects the device from the screenshot's pixel size (iPhone 5s → iPhone 17 Pro Max / Air, iPads, MacBooks at every Mac App Store size), or force one with `--device`.
 - Portrait and landscape (choose which side the notch / Dynamic Island ends up on).
 - **Mac windows**: a Mac app's window capture of any size, frameless with rounded corners and a shadow, the usual Mac App Store look.
-- Output at any size up to the screenshot's native size (for Mac, up to 2880×1800, the Mac App Store's largest), aspect-fit and centred.
+- Output at any size up to the screenshot's native size (for Mac, up to 2880×1800, the Mac App Store's largest), aspect-fit and centred, or beyond it on request, for images such as the App Store's 3840-pixel product page header.
 - **Inset mode**: title + subtitle above or below the device on a linear gradient, rendered with CoreText (system SF font or any installed font).
 - **Layouts** (inset mode): let the device bleed off the edge, place and rotate one or more devices anywhere (hero crops, overlapping pairs), enlarge part of a screen into a zoom callout, add drop shadows, and cut one wide canvas into a panorama of several images. The text follows placed devices: it moves down to them (or stays at the top), grows or shrinks to fill the room, and tilts slightly with them.
 - **Style** (inset mode): soft glows and pictures (a logo, a shape) over the background gradient, one accented word per title, and a shadow or coloured glow of its own for each callout card.
@@ -281,8 +281,10 @@ Used by `framer render`. JSON, UTF-8. Every key except `screenshots` is optional
 | `height` | integer \| null | screenshot height | Canvas height. |
 | `format` | `"png"` \| `"jpeg"` | `"png"` | PNG keeps transparency. JPEG is flattened onto white if there is no background. |
 | `jpegQuality` | number 0–1 | `0.9` | JPEG compression quality. |
+| `clamp` | boolean | `true` | Keep the canvas within the screenshot's native size (2880×1800 for Mac). `false` lets `width` and `height` go beyond it, for an image larger than any capture, such as the App Store's product page header (3840×1646). Placed devices are sized in page units, so they grow with the canvas; one drawn wider than its frame image is upscaled (see [Resolution](#layouts)). |
+| `opaque` | boolean | `false` | PNG only: write the image without an alpha channel, flattened onto white wherever nothing was drawn, as JPEG is. For images that must have no alpha, such as the App Store's creative assets. |
 
-Sizing: both dims → exact canvas; one dim → the other follows the framed image's aspect; neither → native screenshot size. Never exceeds the screenshot's native size (a warning is printed if clamped). For Mac screenshots, read 2880×1800 for both "framed image" and "native screenshot size": the canvas defaults to 2880×1800, one dimension gives 16:10, and nothing goes above it.
+Sizing: both dims → exact canvas; one dim → the other follows the framed image's aspect; neither → native screenshot size. Never exceeds the screenshot's native size (a warning is printed if clamped), unless `clamp` is `false`. For Mac screenshots, read 2880×1800 for both "framed image" and "native screenshot size": the canvas defaults to 2880×1800, one dimension gives 16:10, and nothing goes above it.
 
 ### `background`
 
@@ -683,7 +685,7 @@ let job = RenderJob(
 let (outcomes, failures) = await renderer.run([job])
 ```
 
-For layouts, `RenderJob.InsetSettings` also takes `bleed`, `shadow: ShadowSpec?`, `textScale: ClosedRange<Double>`, `maxTextRotation`, `devices: [RenderJob.PlacedDevice]` (each with its own `input` and a `DevicePlacement`), `callouts: [CalloutSpec]` and `pages: [RenderJob.Page]`, and for style `accent`, `accentColor`, `textAnchor: TextAnchor`, `glows: [GlowSpec]` and `backgroundImages: [BackgroundImageSpec]`, mirroring the config keys. `RenderJob.outputURLs` lists the files a job writes.
+For layouts, `RenderJob.InsetSettings` also takes `bleed`, `shadow: ShadowSpec?`, `textScale: ClosedRange<Double>`, `maxTextRotation`, `devices: [RenderJob.PlacedDevice]` (each with its own `input` and a `DevicePlacement`), `callouts: [CalloutSpec]` and `pages: [RenderJob.Page]`, and for style `accent`, `accentColor`, `textAnchor: TextAnchor`, `glows: [GlowSpec]` and `backgroundImages: [BackgroundImageSpec]`, mirroring the config keys. `RenderJob` takes `clampsSize` and `opaque` for `output.clamp` and `output.opaque`. `RenderJob.outputURLs` lists the files a job writes.
 
 `Renderer.run` never throws; it returns per-job outcomes and errors. `Outcome.outputs` has one URL per page and `Outcome.screens` one entry per device. For finer control, `Renderer.prepare(_:manifest:)` (async: detect device, fetch frame) and `Renderer.render(_:)` (synchronous: all CoreGraphics work) can be called separately. Loading a config file: `ConfigLoader.load(url)` → `ConfigLoader.jobs(from:baseDirectory:)`.
 
@@ -752,7 +754,7 @@ The committed PNGs are downscaled to 640 px for the README (the Mac ones to 900 
 
 ```sh
 swift build
-swift test          # 164 tests; synthetic frames, no network
+swift test          # 172 tests; synthetic frames, no network
 ```
 
 - `Sources/FramerCore` — the library (device table, frame store, geometry, rendering, config, pipeline).

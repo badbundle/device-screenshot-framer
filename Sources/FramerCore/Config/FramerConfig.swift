@@ -98,12 +98,26 @@ public struct OutputConfig: Sendable, Codable, Equatable {
     public var height: Int?
     public var format: OutputFormat
     public var jpegQuality: Double
+    /// Keep the canvas within the screenshot's native size (2880×1800 for Mac). `false` lets `width` and `height` go
+    /// beyond it.
+    public var clamp: Bool
+    /// PNG without an alpha channel, flattened onto white where nothing was drawn.
+    public var opaque: Bool
 
-    public init(width: Int? = nil, height: Int? = nil, format: OutputFormat = .png, jpegQuality: Double = 0.9) {
+    public init(
+        width: Int? = nil,
+        height: Int? = nil,
+        format: OutputFormat = .png,
+        jpegQuality: Double = 0.9,
+        clamp: Bool = true,
+        opaque: Bool = false
+    ) {
         self.width = width
         self.height = height
         self.format = format
         self.jpegQuality = jpegQuality
+        self.clamp = clamp
+        self.opaque = opaque
     }
 
     public init(from decoder: Decoder) throws {
@@ -112,6 +126,8 @@ public struct OutputConfig: Sendable, Codable, Equatable {
         height = try c.decodeIfPresent(Int.self, forKey: .height)
         format = try c.decodeIfPresent(OutputFormat.self, forKey: .format) ?? .png
         jpegQuality = try c.decodeIfPresent(Double.self, forKey: .jpegQuality) ?? 0.9
+        clamp = try c.decodeIfPresent(Bool.self, forKey: .clamp) ?? true
+        opaque = try c.decodeIfPresent(Bool.self, forKey: .opaque) ?? false
     }
 }
 
